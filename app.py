@@ -1,145 +1,111 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "13f50a57",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import streamlit as st\n",
-    "import requests\n",
-    "import pandas as pd\n",
-    "from datetime import datetime\n",
-    "import mplfinance as mpf\n",
-    "import matplotlib.pyplot as plt\n",
-    "import pandas_datareader.data as web\n",
-    "\n",
-    "# --------------------------------------#\n",
-    "# Streamlit App Configuration\n",
-    "# --------------------------------------#\n",
-    "st.set_page_config(page_title=\"Stock & Fed Funds Rate Analysis\", layout=\"wide\")\n",
-    "\n",
-    "# App Title\n",
-    "st.title(\"Stock Analysis with Fed Funds Rate\")\n",
-    "\n",
-    "# --------------------------------------#\n",
-    "# User Input: Stock Ticker and Date Range\n",
-    "# --------------------------------------#\n",
-    "st.sidebar.header(\"Input Parameters\")\n",
-    "\n",
-    "# Get stock ticker from user\n",
-    "ticker = st.sidebar.text_input(\"Enter the stock ticker symbol (e.g., AAPL, VOO):\", value=\"AAPL\").upper()\n",
-    "\n",
-    "# Get start date from user\n",
-    "start_date = st.sidebar.date_input(\"Start Date:\", datetime(2023, 1, 1)).strftime('%Y-%m-%d')\n",
-    "\n",
-    "# Get end date (current date)\n",
-    "end_date = datetime.today().strftime('%Y-%m-%d')\n",
-    "\n",
-    "# --------------------------------------#\n",
-    "# Fetch and Process Stock Data\n",
-    "# --------------------------------------#\n",
-    "st.sidebar.write(\"Fetching stock data...\")\n",
-    "\n",
-    "api_key = \"DEMO\"  # Replace with your EOD API key\n",
-    "url = (\n",
-    "    f\"https://eodhistoricaldata.com/api/eod/{ticker}\"\n",
-    "    f\"?api_token={api_key}&from={start_date}&to={end_date}&fmt=json\"\n",
-    ")\n",
-    "\n",
-    "response = requests.get(url)\n",
-    "\n",
-    "if response.status_code == 200:\n",
-    "    data = response.json()\n",
-    "    if isinstance(data, list) and len(data) > 0:\n",
-    "        # Convert JSON data into a DataFrame\n",
-    "        df = pd.DataFrame(data)\n",
-    "        df['date'] = pd.to_datetime(df['date'])\n",
-    "        df.sort_values('date', inplace=True)\n",
-    "        df.set_index('date', inplace=True)\n",
-    "        \n",
-    "        # Resample daily data into monthly aggregated OHLC data\n",
-    "        monthly_df = df.resample('M').agg({\n",
-    "            'open': 'first',\n",
-    "            'high': 'max',\n",
-    "            'low': 'min',\n",
-    "            'close': 'last',\n",
-    "            'volume': 'sum'\n",
-    "        })\n",
-    "        st.sidebar.success(\"Stock data fetched successfully!\")\n",
-    "    else:\n",
-    "        st.sidebar.error(\"No stock data returned. Check the ticker symbol or date range.\")\n",
-    "        monthly_df = pd.DataFrame()\n",
-    "else:\n",
-    "    st.sidebar.error(f\"Error fetching stock data; HTTP Status Code: {response.status_code}\")\n",
-    "    monthly_df = pd.DataFrame()\n",
-    "\n",
-    "# --------------------------------------#\n",
-    "# Fetch and Process Fed Funds Rate Data\n",
-    "# --------------------------------------#\n",
-    "st.sidebar.write(\"Fetching Fed Funds Rate data...\")\n",
-    "\n",
-    "try:\n",
-    "    # Fetch Fed Funds Rate (FEDFUNDS) from FRED\n",
-    "    fed_data = web.DataReader('FEDFUNDS', 'fred', start_date, end_date)\n",
-    "    fed_monthly = fed_data.resample('M').mean()\n",
-    "    fed_monthly_aligned = fed_monthly.reindex(monthly_df.index, method='ffill')\n",
-    "    fed_monthly_aligned.fillna(method='bfill', inplace=True)\n",
-    "    st.sidebar.success(\"Fed Funds Rate data fetched successfully!\")\n",
-    "except Exception as e:\n",
-    "    st.sidebar.error(f\"Error fetching Fed Funds Rate data: {e}\")\n",
-    "    fed_monthly_aligned = pd.DataFrame()\n",
-    "\n",
-    "# --------------------------------------#\n",
-    "# Plotting the Data\n",
-    "# --------------------------------------#\n",
-    "if not monthly_df.empty and not fed_monthly_aligned.empty:\n",
-    "    st.sidebar.write(\"Generating chart...\")\n",
-    "\n",
-    "    # Create mplfinance chart\n",
-    "    ap_fed = mpf.make_addplot(fed_monthly_aligned['FEDFUNDS'], panel=1, color='red')\n",
-    "\n",
-    "    # Create figure and adjust layout\n",
-    "    fig, axes = mpf.plot(monthly_df,\n",
-    "                         type='ohlc',\n",
-    "                         style='charles',\n",
-    "                         title=f'{ticker} Monthly OHLC Chart with Fed Funds Rate',\n",
-    "                         ylabel='Price (USD)',\n",
-    "                         addplot=ap_fed,\n",
-    "                         volume=False,\n",
-    "                         panel_ratios=(3, 1),\n",
-    "                         returnfig=True)\n",
-    "\n",
-    "    # Adjust Fed Funds Rate y-label\n",
-    "    axes[1].set_ylabel(\"Fed Funds Rate (%)\", rotation=90, va='center', labelpad=15)\n",
-    "\n",
-    "    # Display chart in Streamlit\n",
-    "    st.pyplot(fig)\n",
-    "else:\n",
-    "    st.warning(\"Insufficient data: Stock data or Fed Funds Rate data is not available for the given date range.\")\n"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.9.7"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import streamlit as st
+import requests
+import pandas as pd
+from datetime import datetime
+import mplfinance as mpf
+import pandas_datareader.data as web
+
+# --------------------------------------#
+# Streamlit App Configuration
+# --------------------------------------#
+st.set_page_config(page_title="Stock & Fed Funds Rate Analysis", layout="wide")
+
+# App Title
+st.title("Stock Analysis with Fed Funds Rate")
+
+# --------------------------------------#
+# User Input: Stock Ticker and Date Range
+# --------------------------------------#
+st.sidebar.header("Input Parameters")
+
+# Get stock ticker from user
+ticker = st.sidebar.text_input("Enter the stock ticker symbol (e.g., AAPL, VOO):", value="AAPL").upper()
+
+# Get start date from user
+start_date = st.sidebar.date_input("Start Date:", datetime(2023, 1, 1)).strftime('%Y-%m-%d')
+
+# Get end date (current date)
+end_date = datetime.today().strftime('%Y-%m-%d')
+
+# --------------------------------------#
+# Fetch and Process Stock Data
+# --------------------------------------#
+st.sidebar.write("Fetching stock data...")
+
+api_key = "DEMO"  # Replace with your EOD API key
+url = (
+    f"https://eodhistoricaldata.com/api/eod/{ticker}"
+    f"?api_token={api_key}&from={start_date}&to={end_date}&fmt=json"
+)
+
+response = requests.get(url)
+
+if response.status_code == 200:
+    data = response.json()
+    if isinstance(data, list) and len(data) > 0:
+        # Convert JSON data into a DataFrame
+        df = pd.DataFrame(data)
+        df['date'] = pd.to_datetime(df['date'])
+        df.sort_values('date', inplace=True)
+        df.set_index('date', inplace=True)
+        
+        # Resample daily data into monthly aggregated OHLC data
+        monthly_df = df.resample('M').agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        })
+        st.sidebar.success("Stock data fetched successfully!")
+    else:
+        st.sidebar.error("No stock data returned. Check the ticker symbol or date range.")
+        monthly_df = pd.DataFrame()
+else:
+    st.sidebar.error(f"Error fetching stock data; HTTP Status Code: {response.status_code}")
+    monthly_df = pd.DataFrame()
+
+# --------------------------------------#
+# Fetch and Process Fed Funds Rate Data
+# --------------------------------------#
+st.sidebar.write("Fetching Fed Funds Rate data...")
+
+try:
+    # Fetch Fed Funds Rate (FEDFUNDS) from FRED
+    fed_data = web.DataReader('FEDFUNDS', 'fred', start_date, end_date)
+    fed_monthly = fed_data.resample('M').mean()
+    fed_monthly_aligned = fed_monthly.reindex(monthly_df.index, method='ffill')
+    fed_monthly_aligned.fillna(method='bfill', inplace=True)
+    st.sidebar.success("Fed Funds Rate data fetched successfully!")
+except Exception as e:
+    st.sidebar.error(f"Error fetching Fed Funds Rate data: {e}")
+    fed_monthly_aligned = pd.DataFrame()
+
+# --------------------------------------#
+# Plotting the Data
+# --------------------------------------#
+if not monthly_df.empty and not fed_monthly_aligned.empty:
+    st.sidebar.write("Generating chart...")
+
+    # Create mplfinance chart
+    ap_fed = mpf.make_addplot(fed_monthly_aligned['FEDFUNDS'], panel=1, color='red')
+
+    # Create figure and adjust layout
+    fig, axes = mpf.plot(monthly_df,
+                         type='ohlc',
+                         style='charles',
+                         title=f'{ticker} Monthly OHLC Chart with Fed Funds Rate',
+                         ylabel='Price (USD)',
+                         addplot=ap_fed,
+                         volume=False,
+                         panel_ratios=(3, 1),
+                         returnfig=True)
+
+    # Adjust Fed Funds Rate y-label
+    axes[1].set_ylabel("Fed Funds Rate (%)", rotation=90, va='center', labelpad=15)
+
+    # Display chart in Streamlit
+    st.pyplot(fig)
+else:
+    st.warning("Insufficient data: Stock data or Fed Funds Rate data is not available for the given date range.")
+
