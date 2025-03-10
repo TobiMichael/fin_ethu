@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
-import mplfinance as mpf
 import pandas_datareader.data as web
 
 # --------------------------------------#
@@ -87,25 +86,12 @@ except Exception as e:
 if not monthly_df.empty and not fed_monthly_aligned.empty:
     st.sidebar.write("Generating chart...")
 
-    # Create mplfinance chart
-    ap_fed = mpf.make_addplot(fed_monthly_aligned['FEDFUNDS'], panel=1, color='red')
+    # Create a simple line chart to display stock close prices
+    st.line_chart(monthly_df['close'], use_container_width=True)
 
-    # Create figure and adjust layout
-    fig, axes = mpf.plot(monthly_df,
-                         type='ohlc',
-                         style='charles',
-                         title=f'{ticker} Monthly OHLC Chart with Fed Funds Rate',
-                         ylabel='Price (USD)',
-                         addplot=ap_fed,
-                         volume=False,
-                         panel_ratios=(3, 1),
-                         returnfig=True)
-
-    # Adjust Fed Funds Rate y-label
-    axes[1].set_ylabel("Fed Funds Rate (%)", rotation=90, va='center', labelpad=15)
-
-    # Display chart in Streamlit
-    st.pyplot(fig)
+    # Overlay the Fed Funds Rate as a line chart
+    st.line_chart(fed_monthly_aligned['FEDFUNDS'], use_container_width=True)
 else:
     st.warning("Insufficient data: Stock data or Fed Funds Rate data is not available for the given date range.")
+
 
