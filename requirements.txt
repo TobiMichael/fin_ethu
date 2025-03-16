@@ -1,6 +1,6 @@
 streamlit
 pandas
-pandas-datareader==0.10.0
+pandas-datareader
 matplotlib
 requests
 packaging
