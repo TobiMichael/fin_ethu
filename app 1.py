@@ -1,3 +1,4 @@
+import pandas as pd  # Ensure pandas is imported for date conversion
 import yfinance as yf
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -17,6 +18,9 @@ def main():
         stock_data = yf.download("AAPL", start=start_date, end=end_date)
 
         if not stock_data.empty:
+            # Clean the stock data (ensure there are no missing values)
+            stock_data.dropna(inplace=True)
+
             # Plot stock data
             st.write("### Apple Stock Closing Price Chart")
             plt.figure(figsize=(12, 6))
