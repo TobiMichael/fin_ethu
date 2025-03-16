@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import mplfinance as mpf
 from datetime import datetime
-import pandas_datareader.data as web
+import yfinance as yf  # Replacing pandas_datareader with yfinance for fetching stock data
 
 # Fetching Federal Reserve rate data
 def fetch_fed_rate_data():
@@ -22,13 +22,13 @@ def fetch_fed_rate_data():
 
     return pd.DataFrame(data)
 
-# Fetching stock data for Apple
+# Fetching stock data for Apple using yfinance
 def fetch_apple_stock_data():
-    start_date = datetime(2000, 1, 1)
-    end_date = datetime(2025, 3, 10)
+    start_date = "2000-01-01"
+    end_date = "2025-03-10"
 
-    # Use pandas_datareader to get data from Yahoo Finance
-    stock_data = web.DataReader("AAPL", "yahoo", start_date, end_date)
+    # Use yfinance to fetch Apple stock data
+    stock_data = yf.download("AAPL", start=start_date, end=end_date)
     stock_data.index.name = 'Date'  # Ensure proper index name for mplfinance
     return stock_data
 
