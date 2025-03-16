@@ -1,19 +1,39 @@
 import pandas as pd
-import yfinance as yf
+import requests
 import streamlit as st
-import matplotlib.pyplot as plt
 import mplfinance as mpf
 
-# Fetch Apple stock data
+# Fetch stock data using EOD API
 def fetch_apple_stock_data():
+    api_key = "DEMO"  # Replace with your EOD API key
+    symbol = "AAPL.US"  # EOD API format for Apple stock
     start_date = "2000-01-01"
     end_date = "2025-03-10"
 
-    try:
-        stock_data = yf.download("AAPL", start=start_date, end=end_date)
+    # EOD API endpoint
+    url = f"https://eodhd.com/api/eod/{symbol}?api_token={api_key}&from={start_date}&to={end_date}"
 
-        # Remove rows with missing values
-        stock_data.dropna(inplace=True)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+
+        # Parse the JSON response
+        data = response.json()
+
+        # Convert to DataFrame
+        stock_data = pd.DataFrame(data)
+        stock_data['Date'] = pd.to_datetime(stock_data['date'])
+        stock_data.set_index('Date', inplace=True)
+
+        # Keep only required columns and rename them for mplfinance
+        stock_data = stock_data.rename(columns={
+            'open': 'Open',
+            'high': 'High',
+            'low': 'Low',
+            'close': 'Close',
+            'volume': 'Volume'
+        })
+        stock_data = stock_data[['Open', 'High', 'Low', 'Close', 'Volume']]
 
         # Ensure numeric data
         stock_data = stock_data.astype({
@@ -23,16 +43,16 @@ def fetch_apple_stock_data():
             "Close": "float",
             "Volume": "float"
         })
-        stock_data.index.name = 'Date'  # Ensure proper index name
+
         return stock_data
     except Exception as e:
-        st.error(f"Error fetching or processing Apple stock data: {e}")
+        st.error(f"Error fetching stock data: {e}")
         return pd.DataFrame()
 
 # Main app
 def main():
-    st.title("Apple Stock Price Viewer")
-    st.write("This app fetches and visualizes Apple (AAPL) stock data using cleaned data.")
+    st.title("Apple Stock Price Viewer (EOD API)")
+    st.write("This app fetches Apple (AAPL) stock data using the EOD API and visualizes it.")
 
     # Fetch stock data
     stock_data = fetch_apple_stock_data()
@@ -41,13 +61,6 @@ def main():
     if not stock_data.empty:
         st.write("### Data Preview")
         st.dataframe(stock_data)
-
-        # Check if required columns are present
-        required_columns = ["Open", "High", "Low", "Close", "Volume"]
-        missing_columns = [col for col in required_columns if col not in stock_data.columns]
-        if missing_columns:
-            st.error(f"Missing required columns: {missing_columns}")
-            return
 
         # Plot candlestick chart
         st.write("### Apple Stock Candlestick Chart")
@@ -65,7 +78,7 @@ def main():
         except ValueError as ve:
             st.error(f"Error plotting the candlestick chart: {ve}")
     else:
-        st.warning("No data available. Please check the date range or data source.")
+        st.warning("No data available. Please check the API key or date range.")
 
 if __name__ == "__main__":
     main()
