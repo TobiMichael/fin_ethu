@@ -1,0 +1,6 @@
+streamlit
+requests
+pandas
+mplfinance
+matplotlib
+pandas_datareader
