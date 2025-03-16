@@ -5,3 +5,4 @@ mplfinance==0.12.9b7
 setuptools==67.8.0
 packaging==23.1
 matplotlib==3.6.3
+python-3.11.6
