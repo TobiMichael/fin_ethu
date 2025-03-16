@@ -1,81 +1,41 @@
-import pandas as pd
+import yfinance as yf
 import streamlit as st
-import mplfinance as mpf
-from datetime import datetime
-import yfinance as yf  # Replacing pandas_datareader with yfinance for fetching stock data
-
-# Fetching Federal Reserve rate data
-def fetch_fed_rate_data():
-    # Example dataset - Replace with actual data source or API call
-    dates = pd.date_range(start='2000-01-01', end='2025-03-10', freq='AS')
-    rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
-             0.1, 0.25, 0.75, 1.5, 2.5, 2.25, 4.5, 4.75, 5.0, 5.5, 5.0, 5.25, 5.5]
-
-    # Adjust length of rates to match length of dates
-    if len(rates) < len(dates):
-        rates.extend([None] * (len(dates) - len(rates)))  # Fill with None if rates are too few
-
-    data = {
-        'Date': dates,
-        'Rate': rates
-    }
-
-    return pd.DataFrame(data)
-
-# Fetching stock data for Apple using yfinance
-def fetch_apple_stock_data():
-    start_date = "2000-01-01"
-    end_date = "2025-03-10"
-
-    # Use yfinance to fetch Apple stock data
-    stock_data = yf.download("AAPL", start=start_date, end=end_date)
-    stock_data.index.name = 'Date'  # Ensure proper index name for mplfinance
-    return stock_data
+import matplotlib.pyplot as plt
 
 # Streamlit app
 def main():
-    st.title("Apple Stock Prices and Federal Reserve Rates")
-    st.write("This app visualizes Apple stock prices and Federal Reserve interest rates.")
+    st.title("Apple Stock Price Viewer")
+    st.write("This app fetches Apple (AAPL) stock data from Yahoo Finance and visualizes it.")
 
-    # Fetch and process Federal Reserve rate data
-    fed_data = fetch_fed_rate_data()
-    if not fed_data.empty:
-        fed_data['Date'] = pd.to_datetime(fed_data['Date'])
-        fed_data.set_index('Date', inplace=True)
+    # Set the date range
+    start_date = st.date_input("Start date", value=pd.to_datetime("2000-01-01"))
+    end_date = st.date_input("End date", value=pd.to_datetime("today"))
 
-    # Fetch and process Apple stock data
-    stock_data = fetch_apple_stock_data()
+    # Fetch stock data
+    try:
+        st.write(f"Fetching Apple stock data from **{start_date}** to **{end_date}**...")
+        stock_data = yf.download("AAPL", start=start_date, end=end_date)
 
-    if not stock_data.empty and not fed_data.empty:
-        # Display mplfinance plot with Apple stock
-        st.write("### Candlestick Chart: Apple Stock Prices")
+        if not stock_data.empty:
+            # Plot stock data
+            st.write("### Apple Stock Closing Price Chart")
+            plt.figure(figsize=(12, 6))
+            plt.plot(stock_data.index, stock_data['Close'], label='Apple Stock Price', color='blue')
+            plt.title("Apple Stock Prices Over Time", fontsize=16)
+            plt.xlabel("Date", fontsize=12)
+            plt.ylabel("Closing Price (USD)", fontsize=12)
+            plt.legend(loc="upper left")
+            plt.grid(visible=True, linestyle='--', alpha=0.5)
+            st.pyplot(plt)  # Display the plot using Streamlit
 
-        # Create the candlestick chart
-        fig, axes = mpf.plot(
-            stock_data,
-            type='candle',       # Use candlestick chart
-            style='charles',     # Use a pre-defined chart style
-            title="Apple Stock Prices (2000-2025)",
-            volume=True,         # Display volume data
-            ylabel="Stock Price (USD)",
-            returnfig=True
-        )
+            # Show raw data
+            st.write("### Raw Stock Data")
+            st.dataframe(stock_data)
+        else:
+            st.warning("No data available for the selected date range. Please try again.")
 
-        # Display the mplfinance chart
-        st.pyplot(fig)
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
 
-        # Display Federal Reserve rate data
-        st.write("### Federal Reserve Rates")
-        st.line_chart(fed_data["Rate"])  # Plot Fed Rates over time
-
-        # Display data tables for reference
-        st.write("### Apple Stock Data:")
-        st.dataframe(stock_data)
-
-        st.write("### Federal Reserve Rate Data:")
-        st.dataframe(fed_data)
-    else:
-        st.warning("No data available to display. Please check your data source.")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
