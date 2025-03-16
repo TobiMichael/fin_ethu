@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import mplfinance as mpf
 from datetime import datetime
 import pandas_datareader.data as web
 
@@ -27,41 +28,56 @@ def fetch_stock_data():
 
     # Use pandas_datareader to get data from Yahoo Finance
     stock_data = web.DataReader("AAPL", "yahoo", start_date, end_date)
-    stock_data.reset_index(inplace=True)  # Reset index for easier handling
-    stock_data.rename(columns={"Date": "Stock Date"}, inplace=True)  # Rename date column
+    stock_data.index.name = 'Date'  # Ensure proper index name for mplfinance
     return stock_data
 
 # Streamlit app
 def main():
     st.title("Apple Stock vs Federal Reserve Rate")
-    st.write("This app displays Apple stock prices compared with the Federal Reserve interest rates over time.")
+    st.write("This app visualizes Apple stock prices (as a candlestick chart) alongside Federal Reserve interest rates.")
 
     # Fetch and process Fed rate data
     fed_data = fetch_fed_rate_data()
     if not fed_data.empty:
         fed_data['Date'] = pd.to_datetime(fed_data['Date'])
+        fed_data.set_index('Date', inplace=True)
 
     # Fetch and process stock data
     stock_data = fetch_stock_data()
 
     if not stock_data.empty and not fed_data.empty:
-        # Plotting stock prices
-        st.write("### Apple Stock Price")
-        st.line_chart(stock_data.set_index("Stock Date")["Close"])  # Plot stock closing prices
+        # Display mplfinance plot with Apple stock and Fed Rates
+        st.write("### Candlestick Chart: Apple Stock with Fed Funds Rate")
 
-        # Plotting Fed rates
-        st.write("### Federal Reserve Rates")
-        st.line_chart(fed_data.set_index("Date")["Rate"])  # Plot Fed rates
+        # Create an additional panel for the Fed Rate
+        add_plot_fed = mpf.make_addplot(
+            fed_data['Rate'], 
+            panel=1, 
+            color='red', 
+            ylabel='Fed Funds Rate (%)'
+        )
 
-        # Combine both datasets for easier analysis
-        combined_data = pd.merge_asof(stock_data.sort_values("Stock Date"), 
-                                       fed_data.sort_values("Date"), 
-                                       left_on="Stock Date", 
-                                       right_on="Date")
+        # Create the candlestick chart
+        fig, axes = mpf.plot(
+            stock_data,
+            type='candle',  # Candlestick chart
+            style='charles',  # Style for the chart
+            title='Apple Stock Prices and Federal Funds Rate',
+            addplot=add_plot_fed,
+            volume=True,  # Include volume in the plot
+            panel_ratios=(3, 1),  # Allocate more space to the stock chart
+            returnfig=True
+        )
 
-        # Display the combined data
-        st.write("### Combined Data")
-        st.dataframe(combined_data)
+        # Use Streamlit to display the mplfinance figure
+        st.pyplot(fig)
+
+        # Display data tables for reference
+        st.write("### Federal Reserve Rate Data:")
+        st.dataframe(fed_data)
+
+        st.write("### Apple Stock Data:")
+        st.dataframe(stock_data)
     else:
         st.warning("No data available to display.")
 
