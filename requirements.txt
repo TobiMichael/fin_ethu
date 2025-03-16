@@ -1,6 +1,6 @@
 streamlit
-requests
 pandas
-mplfinance
+pandas-datareader==0.10.0
 matplotlib
-pandas_datareader
+requests
+packaging
