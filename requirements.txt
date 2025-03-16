@@ -4,4 +4,3 @@ pandas-datareader==0.10.0
 matplotlib
 requests
 packaging
-python-3.11.6
