@@ -23,7 +23,7 @@ def fetch_fed_rate_data():
     return pd.DataFrame(data)
 
 # Streamlit app title
-st.title("Apple Stock, Federal Reserve Rate, and Inflation Analysis")
+st.title("Apple Stock and Federal Reserve Rate Analysis")
 
 # Single date range slider at the top of the screen
 date_range = st.slider(
@@ -52,7 +52,7 @@ df.set_index('Date', inplace=True)
 # Generate the candlestick chart
 fig, ax_candles = plt.subplots(figsize=(12, 6))  # Create figure for candlestick chart
 mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick chart
-st.subheader("Candlestick Chart")
+st.subheader("Apple Stock Candlestick Chart")
 st.pyplot(fig)
 
 # Fetch and process Fed rate data
@@ -66,28 +66,3 @@ if not fed_data.empty:
     # Generate the Fed rate chart
     st.subheader("Federal Reserve Rate Chart")
     st.line_chart(fed_data_filtered.set_index('Date'))
-
-    # Display Fed rate data table
-    st.write("Federal Reserve Interest Rate Data:")
-    st.dataframe(fed_data_filtered)
-
-# Fetch inflation rate data (example using a placeholder dataset)
-inflation_data = {
-    "Date": ["2000-01-01", "2005-01-01", "2010-01-01", "2015-01-01", "2020-01-01", "2025-01-01"],
-    "Inflation Rate (%)": [3.4, 2.8, 1.6, 0.1, 1.2, 2.3]
-}
-inflation_df = pd.DataFrame(inflation_data)
-inflation_df['Date'] = pd.to_datetime(inflation_df['Date'])
-inflation_df.set_index('Date', inplace=True)
-
-# Filter inflation data by selected date range
-inflation_df = inflation_df[(inflation_df.index >= start_date) & (inflation_df.index <= end_date)]
-
-# Generate the inflation rate chart
-fig, ax_inflation = plt.subplots(figsize=(12, 4))  # Create a separate figure for inflation rate chart
-ax_inflation.plot(inflation_df.index, inflation_df["Inflation Rate (%)"], color="green", linewidth=2)
-ax_inflation.set_title("Inflation Rate Over Time")
-ax_inflation.set_ylabel("Inflation Rate (%)")
-ax_inflation.set_xlabel("Date")
-st.subheader("Inflation Rate Chart")
-st.pyplot(fig)
