@@ -6,6 +6,9 @@ import streamlit as st
 from matplotlib import pyplot as plt
 from datetime import datetime
 
+# Set the page configuration with title and layout
+st.set_page_config(page_title="Finance Ethutisat", layout="wide")
+
 # Fetching Federal Reserve rate data
 def fetch_fed_rate_data():
     dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('%Y-%m-%d'), freq='AS')
