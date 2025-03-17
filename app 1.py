@@ -6,6 +6,22 @@ import streamlit as st
 from matplotlib import pyplot as plt
 from datetime import datetime
 
+# Fetching Federal Reserve rate data
+def fetch_fed_rate_data():
+    dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('%Y-%m-%d'), freq='AS')
+    rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
+             0.1, 0.25, 0.75, 1.5, 2.5, 2.25, 4.5, 4.75, 5.0, 5.5, 5.0, 5.25, 5.5]
+
+    if len(rates) < len(dates):
+        rates.extend([None] * (len(dates) - len(rates)))
+
+    data = {
+        'Date': dates,
+        'Rate': rates
+    }
+
+    return pd.DataFrame(data)
+
 # Streamlit app title
 st.title("Stock and Federal Reserve Rate Analysis")
 
@@ -14,11 +30,12 @@ st.sidebar.title("Stock Ticker Input")
 stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
 
 # Single date range slider at the top of the screen
+today = datetime.now()  # Get today's date dynamically
 date_range = st.slider(
     "Select Date Range:",
     min_value=datetime(2000, 1, 1),
-    max_value=datetime(2025, 1, 1),
-    value=(datetime(2000, 1, 1), datetime(2025, 1, 1)),
+    max_value=today,
+    value=(datetime(2000, 1, 1), today),
     format="YYYY-MM-DD"
 )
 start_date, end_date = date_range
@@ -45,21 +62,6 @@ else:
     st.warning(f"No data available for the stock ticker: {stock_ticker.upper()}")
 
 # Fetch and process Fed rate data
-def fetch_fed_rate_data():
-    dates = pd.date_range(start='2000-01-01', end='2025-03-10', freq='AS')
-    rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
-             0.1, 0.25, 0.75, 1.5, 2.5, 2.25, 4.5, 4.75, 5.0, 5.5, 5.0, 5.25, 5.5]
-
-    if len(rates) < len(dates):
-        rates.extend([None] * (len(dates) - len(rates)))
-
-    data = {
-        'Date': dates,
-        'Rate': rates
-    }
-
-    return pd.DataFrame(data)
-
 fed_data = fetch_fed_rate_data()
 if not fed_data.empty:
     fed_data['Date'] = pd.to_datetime(fed_data['Date'])
