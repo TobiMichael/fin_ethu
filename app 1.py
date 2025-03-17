@@ -4,18 +4,34 @@ import requests
 from io import StringIO  # Import StringIO from the io library
 import streamlit as st
 from matplotlib import pyplot as plt
+from datetime import datetime
 
 # Streamlit app title
-st.title("Apple Stock, Federal Reserve Rate, and Inflation Analysis (2000 - Present)")
+st.title("Apple Stock, Federal Reserve Rate, and Inflation Analysis")
+
+# Date range selection with sliders
+st.sidebar.subheader("Select Date Range")
+start_date = st.sidebar.slider(
+    "Start Date", 
+    min_value=datetime(2000, 1, 1), 
+    max_value=datetime(2025, 1, 1), 
+    value=datetime(2000, 1, 1), 
+    format="YYYY-MM-DD"
+)
+end_date = st.sidebar.slider(
+    "End Date", 
+    min_value=datetime(2000, 1, 1), 
+    max_value=datetime(2025, 1, 1), 
+    value=datetime(2025, 1, 1), 
+    format="YYYY-MM-DD"
+)
 
 # Replace 'YOUR_API_KEY' with your EOD Historical Data API key
 API_KEY = 'DEMO'  # Replace with your actual API key
 symbol = 'AAPL.US'
-start_date = '2000-01-01'
-end_date = '2025-03-17'
 
 # Fetch EOD data
-url = f'https://eodhistoricaldata.com/api/eod/{symbol}?from={start_date}&to={end_date}&api_token={API_KEY}&period=d'
+url = f'https://eodhistoricaldata.com/api/eod/{symbol}?from={start_date.strftime("%Y-%m-%d")}&to={end_date.strftime("%Y-%m-%d")}&api_token={API_KEY}&period=d'
 response = requests.get(url)
 data = response.text
 
@@ -42,6 +58,9 @@ if 'observations' in fred_response:
     fred_data['value'] = pd.to_numeric(fred_data['value'])
     fred_data.set_index('date', inplace=True)
 
+    # Filter data by selected date range
+    fred_data = fred_data[(fred_data.index >= start_date) & (fred_data.index <= end_date)]
+
     # Generate the Fed rate chart
     fig, ax_fed = plt.subplots(figsize=(12, 4))  # Create a separate figure for Fed rate chart
     ax_fed.plot(fred_data.index, fred_data['value'], color='red', linewidth=2)
@@ -59,6 +78,9 @@ inflation_data = {
 inflation_df = pd.DataFrame(inflation_data)
 inflation_df['Date'] = pd.to_datetime(inflation_df['Date'])
 inflation_df.set_index('Date', inplace=True)
+
+# Filter inflation data by selected date range
+inflation_df = inflation_df[(inflation_df.index >= start_date) & (inflation_df.index <= end_date)]
 
 # Generate the inflation rate chart
 fig, ax_inflation = plt.subplots(figsize=(12, 4))  # Create a separate figure for inflation rate chart
