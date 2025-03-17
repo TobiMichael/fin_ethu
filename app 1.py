@@ -1,77 +1,43 @@
-import pandas as pd
 import requests
+import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# Fetch stock data using EOD API
-def fetch_apple_stock_data():
-    api_key = " 67d76770553416.32501808"  # Replace with your EOD API key
-    symbol = "AAPL.US"  # Apple stock in EOD API format
-    start_date = "2000-01-01"
-    end_date = "2025-03-10"
+# Streamlit app title
+st.title("Stock Price Viewer")
 
-    # EOD API endpoint
-    url = f"https://eodhd.com/api/eod/{symbol}?api_token={api_key}&from={start_date}&to={end_date}"
+# EOD API configuration
+api_key = "DEMO"  # Replace with your EOD API key
+ticker = st.text_input("Enter Stock Ticker (e.g., AAPL.US):", "AAPL.US")  # User input for ticker
+start_date = st.date_input("Start Date", pd.to_datetime("2023-02-01"))  # User input for start date
+end_date = st.date_input("End Date", pd.to_datetime("2023-03-01"))  # User input for end date
 
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise error for bad responses (4xx or 5xx)
+# Fetch stock data from EOD API
+if st.button("Fetch Data"):  # Button to trigger data fetching
+    url = f"https://eodhistoricaldata.com/api/eod/{ticker}?from={start_date}&to={end_date}&api_token={api_key}&fmt=json"
+    response = requests.get(url)
 
-        # Parse JSON response
+    if response.status_code == 200:
         data = response.json()
-        stock_data = pd.DataFrame(data)
+        # Convert to DataFrame
+        df = pd.DataFrame(data)
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
 
-        # Process and clean the DataFrame
-        stock_data['Date'] = pd.to_datetime(stock_data['date'])
-        stock_data.set_index('Date', inplace=True)
+        # Display the data as a table in Streamlit
+        st.write("### Stock Data", df)
 
-        # Rename columns for easier usage
-        stock_data = stock_data.rename(columns={
-            'close': 'Close'
-        })
+        # Plot the stock data
+        st.write("### Closing Price Chart")
+        plt.figure(figsize=(10, 6))
+        plt.plot(df.index, df['close'], label='Closing Price', color='blue')
+        plt.title(f"{ticker} Stock Price ({start_date} to {end_date})")
+        plt.xlabel("Date")
+        plt.ylabel("Price (USD)")
+        plt.legend()
+        plt.grid()
 
-        # Retain only the Date and Close columns
-        stock_data = stock_data[['Close']]
-
-        # Drop missing values
-        stock_data.dropna(inplace=True)
-
-        # Ensure numeric data type for Close column
-        stock_data = stock_data.astype({"Close": "float"})
-
-        return stock_data
-    except Exception as e:
-        st.error(f"Error fetching or processing Apple stock data: {e}")
-        return pd.DataFrame()
-
-# Main app
-def main():
-    st.title("Apple Stock Closing Price Viewer (EOD API)")
-    st.write("This app fetches Apple (AAPL) stock data using the EOD API and plots the closing price over time.")
-
-    # Fetch stock data
-    stock_data = fetch_apple_stock_data()
-
-    # Validate and display data
-    if not stock_data.empty:
-        st.write("### Data Preview")
-        st.dataframe(stock_data)
-
-        # Plot closing price against date
-        st.write("### Apple Stock Closing Price Chart")
-        try:
-            plt.figure(figsize=(12, 6))
-            plt.plot(stock_data.index, stock_data['Close'], label='Closing Price', color='blue')
-            plt.title("Apple Stock Closing Prices Over Time", fontsize=16)
-            plt.xlabel("Date", fontsize=12)
-            plt.ylabel("Closing Price (USD)", fontsize=12)
-            plt.legend(loc="upper left")
-            plt.grid(visible=True, linestyle='--', alpha=0.5)
-            st.pyplot(plt)
-        except ValueError as ve:
-            st.error(f"Error plotting the closing price chart: {ve}")
+        # Render the plot in Streamlit
+        st.pyplot(plt)
     else:
-        st.warning("No data available. Please check the API key or date range.")
-
-if __name__ == "__main__":
-    main()
+        st.error(f"Failed to fetch data: {response.status_code}")
