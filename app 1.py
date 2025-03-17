@@ -6,7 +6,7 @@ import streamlit as st
 from matplotlib import pyplot as plt
 
 # Streamlit app title
-st.title("Apple Stock Candlestick Chart (2000 - Present)")
+st.title("Apple Stock Analysis (2000 - Present)")
 
 # Replace 'YOUR_API_KEY' with your EOD Historical Data API key
 API_KEY = 'DEMO'  # Replace with your actual API key
@@ -24,9 +24,17 @@ df = pd.read_csv(StringIO(data))
 df['Date'] = pd.to_datetime(df['Date'])
 df.set_index('Date', inplace=True)
 
-# Generate the candlestick plot with external axes
-fig, ax_candles = plt.subplots(figsize=(12, 8))  # Create a figure and axes
-mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot on the specified axes
+# Generate the candlestick chart
+fig, ax_candles = plt.subplots(figsize=(12, 6))  # Create figure for candlestick chart
+mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick chart
+st.subheader("Candlestick Chart")
+st.pyplot(fig)
 
-# Render the plot in Streamlit
+# Generate the volume chart
+fig, ax_volume = plt.subplots(figsize=(12, 4))  # Create a separate figure for volume
+ax_volume.bar(df.index, df['Volume'], color='blue', width=1)
+ax_volume.set_title("Volume Over Time")
+ax_volume.set_ylabel("Volume")
+ax_volume.set_xlabel("Date")
+st.subheader("Volume Chart")
 st.pyplot(fig)
