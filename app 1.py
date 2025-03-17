@@ -6,7 +6,7 @@ import streamlit as st
 from matplotlib import pyplot as plt
 
 # Streamlit app title
-st.title("Apple Stock and Federal Reserve Rate Analysis (2000 - Present)")
+st.title("Apple Stock, Federal Reserve Rate, and Inflation Analysis (2000 - Present)")
 
 # Replace 'YOUR_API_KEY' with your EOD Historical Data API key
 API_KEY = 'DEMO'  # Replace with your actual API key
@@ -39,22 +39,21 @@ ax_volume.set_xlabel("Date")
 st.subheader("Volume Chart")
 st.pyplot(fig)
 
-# Fetch Federal Reserve rate data (example using FRED API)
-fred_api_key = 'YOUR_FRED_API_KEY'  # Replace with your FRED API key
-fred_url = f'https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key={fred_api_key}&file_type=json'
-fred_response = requests.get(fred_url).json()
+# Fetch inflation rate data (example using a placeholder API or CSV file)
+# Replace this with actual inflation data source
+inflation_data = {
+    "Date": ["2000-01-01", "2005-01-01", "2010-01-01", "2015-01-01", "2020-01-01", "2025-01-01"],
+    "Inflation Rate (%)": [3.4, 2.8, 1.6, 0.1, 1.2, 2.3]
+}
+inflation_df = pd.DataFrame(inflation_data)
+inflation_df['Date'] = pd.to_datetime(inflation_df['Date'])
+inflation_df.set_index('Date', inplace=True)
 
-# Convert FRED data to DataFrame
-fred_data = pd.DataFrame(fred_response['observations'])
-fred_data['date'] = pd.to_datetime(fred_data['date'])
-fred_data['value'] = pd.to_numeric(fred_data['value'])
-fred_data.set_index('date', inplace=True)
-
-# Generate the Fed rate chart
-fig, ax_fed = plt.subplots(figsize=(12, 4))  # Create a separate figure for Fed rate chart
-ax_fed.plot(fred_data.index, fred_data['value'], color='red', linewidth=2)
-ax_fed.set_title("Federal Reserve Rate Cuts Over Time")
-ax_fed.set_ylabel("Interest Rate (%)")
-ax_fed.set_xlabel("Date")
-st.subheader("Federal Reserve Rate Chart")
+# Generate the inflation rate chart
+fig, ax_inflation = plt.subplots(figsize=(12, 4))  # Create a separate figure for inflation rate chart
+ax_inflation.plot(inflation_df.index, inflation_df['Inflation Rate (%)'], color='green', linewidth=2)
+ax_inflation.set_title("Inflation Rate Over Time")
+ax_inflation.set_ylabel("Inflation Rate (%)")
+ax_inflation.set_xlabel("Date")
+st.subheader("Inflation Rate Chart")
 st.pyplot(fig)
