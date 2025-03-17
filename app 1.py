@@ -9,22 +9,15 @@ from datetime import datetime
 # Streamlit app title
 st.title("Apple Stock, Federal Reserve Rate, and Inflation Analysis")
 
-# Date range selection with sliders
-st.sidebar.subheader("Select Date Range")
-start_date = st.sidebar.slider(
-    "Start Date", 
-    min_value=datetime(2000, 1, 1), 
-    max_value=datetime(2025, 1, 1), 
-    value=datetime(2000, 1, 1), 
+# Single date range slider at the top of the screen
+date_range = st.slider(
+    "Select Date Range:",
+    min_value=datetime(2000, 1, 1),
+    max_value=datetime(2025, 1, 1),
+    value=(datetime(2000, 1, 1), datetime(2025, 1, 1)),
     format="YYYY-MM-DD"
 )
-end_date = st.sidebar.slider(
-    "End Date", 
-    min_value=datetime(2000, 1, 1), 
-    max_value=datetime(2025, 1, 1), 
-    value=datetime(2025, 1, 1), 
-    format="YYYY-MM-DD"
-)
+start_date, end_date = date_range
 
 # Replace 'YOUR_API_KEY' with your EOD Historical Data API key
 API_KEY = 'DEMO'  # Replace with your actual API key
