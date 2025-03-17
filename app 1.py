@@ -39,27 +39,29 @@ mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick ch
 st.subheader("Candlestick Chart")
 st.pyplot(fig)
 
-# Fetch Federal Reserve rate data from a reliable source without API (e.g., MacroTrends)
-fed_rate_url = "https://www.macrotrends.net/2015/fed-funds-rate-historical-chart"  # Example reliable page
-tables = pd.read_html(fed_rate_url)  # Scrape all tables from the webpage
-fed_rate_df = tables[0]  # Assume the first table contains the Fed rates
+# Fetch Federal Reserve rate data (example using FRED API)
+fred_api_key = 'YOUR_FRED_API_KEY'  # Replace with your FRED API key
+fred_url = f'https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key={fred_api_key}&file_type=json'
+fred_response = requests.get(fred_url).json()
 
-# Process the Fed rate data
-fed_rate_df.columns = ["Date", "Fed Rate (%)"]  # Rename columns for consistency
-fed_rate_df["Date"] = pd.to_datetime(fed_rate_df["Date"])  # Convert date column to datetime
-fed_rate_df.set_index("Date", inplace=True)
+# Convert FRED data to DataFrame
+if 'observations' in fred_response:
+    fred_data = pd.DataFrame(fred_response['observations'])
+    fred_data['date'] = pd.to_datetime(fred_data['date'])
+    fred_data['value'] = pd.to_numeric(fred_data['value'])
+    fred_data.set_index('date', inplace=True)
 
-# Filter Fed rate data by the selected date range
-fed_rate_filtered = fed_rate_df[(fed_rate_df.index >= start_date) & (fed_rate_df.index <= end_date)]
+    # Filter data by selected date range
+    fred_data = fred_data[(fred_data.index >= start_date) & (fred_data.index <= end_date)]
 
-# Generate the Fed rate chart
-fig, ax_fed = plt.subplots(figsize=(12, 4))
-ax_fed.plot(fed_rate_filtered.index, fed_rate_filtered["Fed Rate (%)"], color="red", linewidth=2)
-ax_fed.set_title("Federal Reserve Rate Over Time")
-ax_fed.set_ylabel("Interest Rate (%)")
-ax_fed.set_xlabel("Date")
-st.subheader("Federal Reserve Rate Chart")
-st.pyplot(fig)
+    # Generate the Fed rate chart
+    fig, ax_fed = plt.subplots(figsize=(12, 4))  # Create a separate figure for Fed rate chart
+    ax_fed.plot(fred_data.index, fred_data['value'], color='red', linewidth=2)
+    ax_fed.set_title("Federal Reserve Rate Cuts Over Time")
+    ax_fed.set_ylabel("Interest Rate (%)")
+    ax_fed.set_xlabel("Date")
+    st.subheader("Federal Reserve Rate Chart")
+    st.pyplot(fig)
 
 # Fetch inflation rate data (example using a placeholder dataset)
 inflation_data = {
@@ -75,7 +77,7 @@ inflation_df = inflation_df[(inflation_df.index >= start_date) & (inflation_df.i
 
 # Generate the inflation rate chart
 fig, ax_inflation = plt.subplots(figsize=(12, 4))  # Create a separate figure for inflation rate chart
-ax_inflation.plot(inflation_df.index, inflation_df["Inflation Rate (%)"], color="green", linewidth=2)
+ax_inflation.plot(inflation_df.index, inflation_df['Inflation Rate (%)'], color='green', linewidth=2)
 ax_inflation.set_title("Inflation Rate Over Time")
 ax_inflation.set_ylabel("Inflation Rate (%)")
 ax_inflation.set_xlabel("Date")
