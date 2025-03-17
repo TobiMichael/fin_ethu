@@ -28,17 +28,30 @@ def fetch_fed_rate_data():
 # Streamlit app title
 st.title("Finance Enthusiast")
 
-# Stock ticker input
-stock_ticker = st.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
+# Initialize session state for date range if it doesn't exist
+if "start_date" not in st.session_state or "end_date" not in st.session_state:
+    st.session_state.start_date = datetime(2000, 1, 1)
+    st.session_state.end_date = datetime.now()
 
-# Slider for dynamic date range selection
-start_date, end_date = st.slider(
-    "Select Date Range",
+# Sidebar widget for user input
+st.sidebar.title("Stock Ticker Input")
+stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
+
+# Get today's date dynamically
+today = datetime.now()
+
+# Single date range slider at the top of the screen
+date_range = st.slider(
+    "Select Date Range:",
     min_value=datetime(2000, 1, 1),
-    max_value=datetime.now(),
-    value=(datetime(2000, 1, 1), datetime.now()),
+    max_value=today,
+    value=(st.session_state.start_date, st.session_state.end_date),
     format="YYYY-MM-DD"
 )
+
+# Update session state with the selected range
+st.session_state.start_date, st.session_state.end_date = date_range
+start_date, end_date = st.session_state.start_date, st.session_state.end_date
 
 # Fetch data using the stock ticker entered by the user
 API_KEY = 'DEMO'  # Replace with your actual API key
