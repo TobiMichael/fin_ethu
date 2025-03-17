@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from datetime import datetime
 
 # Set the page configuration with title and layout
-st.set_page_config(page_title="Finance Ethutisat", layout="wide")
+st.set_page_config(page_title="Finance Enthutisat", layout="wide")
 
 # Fetching Federal Reserve rate data
 def fetch_fed_rate_data():
@@ -28,6 +28,11 @@ def fetch_fed_rate_data():
 # Streamlit app title
 st.title("Finance Enthutisats")
 
+# Initialize session state for date range
+if 'date_range' not in st.session_state:
+    today = datetime.now()
+    st.session_state.date_range = (datetime(2000, 1, 1), today)
+
 # Sidebar widget for user input
 st.sidebar.title("Stock Ticker Input")
 stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
@@ -38,9 +43,12 @@ date_range = st.slider(
     "Select Date Range:",
     min_value=datetime(2000, 1, 1),
     max_value=today,
-    value=(datetime(2000, 1, 1), today),
+    value=st.session_state.date_range,  # Set session state value
     format="YYYY-MM-DD"
 )
+
+# Update session state with the selected range
+st.session_state.date_range = date_range
 start_date, end_date = date_range
 
 # Fetch data using the stock ticker entered by the user
