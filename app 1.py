@@ -11,7 +11,7 @@ st.set_page_config(page_title="Finance Enthusiast", layout="wide")
 
 # Fetching Federal Reserve rate data
 def fetch_fed_rate_data():
-    dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('%Y-%m-%d'), freq='AS')
+    dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('2025-03-17'), freq='AS')
     rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
              0.1, 0.25, 0.75, 1.5, 2.5, 2.25, 4.5, 4.75, 5.0, 5.5, 5.0, 5.25, 5.5]
 
