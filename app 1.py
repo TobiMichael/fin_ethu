@@ -6,7 +6,45 @@ import streamlit as st
 from matplotlib import pyplot as plt
 from datetime import datetime
 
-# Fetching Federal Reserve rate data
+# Streamlit app title
+st.title("Stock and Federal Reserve Rate Analysis")
+
+# Sidebar widget for user input
+st.sidebar.title("Stock Ticker Input")
+stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
+
+# Single date range slider at the top of the screen
+date_range = st.slider(
+    "Select Date Range:",
+    min_value=datetime(2000, 1, 1),
+    max_value=datetime(2025, 1, 1),
+    value=(datetime(2000, 1, 1), datetime(2025, 1, 1)),
+    format="YYYY-MM-DD"
+)
+start_date, end_date = date_range
+
+# Fetch data using the stock ticker entered by the user
+API_KEY = 'DEMO'  # Replace with your actual API key
+url = f'https://eodhistoricaldata.com/api/eod/{stock_ticker}.US?from={start_date.strftime("%Y-%m-%d")}&to={end_date.strftime("%Y-%m-%d")}&api_token={API_KEY}&period=d'
+
+response = requests.get(url)
+data = response.text
+
+# Convert the data to a DataFrame using StringIO
+df = pd.read_csv(StringIO(data))
+df['Date'] = pd.to_datetime(df['Date'])
+df.set_index('Date', inplace=True)
+
+# Generate the candlestick chart
+if not df.empty:
+    fig, ax_candles = plt.subplots(figsize=(12, 6))  # Create figure for candlestick chart
+    mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick chart
+    st.subheader(f"{stock_ticker.upper()} Stock Candlestick Chart")
+    st.pyplot(fig)
+else:
+    st.warning(f"No data available for the stock ticker: {stock_ticker.upper()}")
+
+# Fetch and process Fed rate data
 def fetch_fed_rate_data():
     dates = pd.date_range(start='2000-01-01', end='2025-03-10', freq='AS')
     rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
@@ -22,40 +60,6 @@ def fetch_fed_rate_data():
 
     return pd.DataFrame(data)
 
-# Streamlit app title
-st.title("Apple Stock and Federal Reserve Rate Analysis")
-
-# Single date range slider at the top of the screen
-date_range = st.slider(
-    "Select Date Range:",
-    min_value=datetime(2000, 1, 1),
-    max_value=datetime(2025, 1, 1),
-    value=(datetime(2000, 1, 1), datetime(2025, 1, 1)),
-    format="YYYY-MM-DD"
-)
-start_date, end_date = date_range
-
-# Replace 'YOUR_API_KEY' with your EOD Historical Data API key
-API_KEY = 'DEMO'  # Replace with your actual API key
-symbol = 'AAPL.US'
-
-# Fetch EOD data
-url = f'https://eodhistoricaldata.com/api/eod/{symbol}?from={start_date.strftime("%Y-%m-%d")}&to={end_date.strftime("%Y-%m-%d")}&api_token={API_KEY}&period=d'
-response = requests.get(url)
-data = response.text
-
-# Convert the data to a DataFrame using StringIO
-df = pd.read_csv(StringIO(data))
-df['Date'] = pd.to_datetime(df['Date'])
-df.set_index('Date', inplace=True)
-
-# Generate the candlestick chart
-fig, ax_candles = plt.subplots(figsize=(12, 6))  # Create figure for candlestick chart
-mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick chart
-st.subheader("Apple Stock Candlestick Chart")
-st.pyplot(fig)
-
-# Fetch and process Fed rate data
 fed_data = fetch_fed_rate_data()
 if not fed_data.empty:
     fed_data['Date'] = pd.to_datetime(fed_data['Date'])
