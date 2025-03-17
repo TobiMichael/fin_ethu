@@ -26,7 +26,7 @@ def fetch_fed_rate_data():
     return pd.DataFrame(data)
 
 # Streamlit app title
-st.title("Stock and Federal Reserve Rate Analysis")
+st.title("Finance Enthutisats")
 
 # Sidebar widget for user input
 st.sidebar.title("Stock Ticker Input")
