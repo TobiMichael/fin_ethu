@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # Fetch stock data using EOD API
 def fetch_apple_stock_data():
-    api_key = "DEMO"  # Replace with your EOD API key
+    api_key = " 67d76770553416.32501808"  # Replace with your EOD API key
     symbol = "AAPL.US"  # Apple stock in EOD API format
     start_date = "2000-01-01"
     end_date = "2025-03-10"
