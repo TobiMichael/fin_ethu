@@ -30,17 +30,28 @@ mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick ch
 st.subheader("Candlestick Chart")
 st.pyplot(fig)
 
-# Generate the volume chart
-fig, ax_volume = plt.subplots(figsize=(12, 4))  # Create a separate figure for volume
-ax_volume.bar(df.index, df['Volume'], color='blue', width=1)
-ax_volume.set_title("Volume Over Time")
-ax_volume.set_ylabel("Volume")
-ax_volume.set_xlabel("Date")
-st.subheader("Volume Chart")
-st.pyplot(fig)
+# Fetch Federal Reserve rate data (example using FRED API)
+fred_api_key = 'YOUR_FRED_API_KEY'  # Replace with your FRED API key
+fred_url = f'https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key={fred_api_key}&file_type=json'
+fred_response = requests.get(fred_url).json()
 
-# Fetch inflation rate data (example using a placeholder API or CSV file)
-# Replace this with actual inflation data source
+# Convert FRED data to DataFrame
+if 'observations' in fred_response:
+    fred_data = pd.DataFrame(fred_response['observations'])
+    fred_data['date'] = pd.to_datetime(fred_data['date'])
+    fred_data['value'] = pd.to_numeric(fred_data['value'])
+    fred_data.set_index('date', inplace=True)
+
+    # Generate the Fed rate chart
+    fig, ax_fed = plt.subplots(figsize=(12, 4))  # Create a separate figure for Fed rate chart
+    ax_fed.plot(fred_data.index, fred_data['value'], color='red', linewidth=2)
+    ax_fed.set_title("Federal Reserve Rate Cuts Over Time")
+    ax_fed.set_ylabel("Interest Rate (%)")
+    ax_fed.set_xlabel("Date")
+    st.subheader("Federal Reserve Rate Chart")
+    st.pyplot(fig)
+
+# Fetch inflation rate data (example using a placeholder dataset)
 inflation_data = {
     "Date": ["2000-01-01", "2005-01-01", "2010-01-01", "2015-01-01", "2020-01-01", "2025-01-01"],
     "Inflation Rate (%)": [3.4, 2.8, 1.6, 0.1, 1.2, 2.3]
