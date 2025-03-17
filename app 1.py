@@ -24,9 +24,9 @@ df = pd.read_csv(StringIO(data))
 df['Date'] = pd.to_datetime(df['Date'])
 df.set_index('Date', inplace=True)
 
-# Generate the candlestick plot
-fig, (ax_candles, ax_volume) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [3, 1]}, figsize=(12, 8))
-mpf.plot(df, type='candle', style='yahoo', volume=True, ax=ax_candles, volume_ax=ax_volume)
+# Generate the candlestick plot with external axes
+fig, ax_candles = plt.subplots(figsize=(12, 8))  # Create a figure and axes
+mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot on the specified axes
 
 # Render the plot in Streamlit
 st.pyplot(fig)
