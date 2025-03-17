@@ -11,7 +11,7 @@ st.set_page_config(page_title="Finance Enthusiast", layout="wide")
 
 # Fetching Federal Reserve rate data
 def fetch_fed_rate_data():
-    dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('2025-03-17'), freq='AS')
+    dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('%Y-%m-%d'), freq='AS')
     rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
              0.1, 0.25, 0.75, 1.5, 2.5, 2.25, 4.5, 4.75, 5.0, 5.5, 5.0, 5.25, 5.5]
 
@@ -37,6 +37,12 @@ if "start_date" not in st.session_state or "end_date" not in st.session_state:
 st.sidebar.title("Stock Ticker Input")
 stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
 
+# Initialize session state for start and end dates if not set
+if "start_date" not in st.session_state:
+    st.session_state.start_date = datetime(2000, 1, 1)
+if "end_date" not in st.session_state:
+    st.session_state.end_date = datetime.now()
+
 # Get today's date dynamically
 today = datetime.now()
 
@@ -50,9 +56,13 @@ date_range = st.slider(
 )
 
 # Update session state with the selected range
-st.session_state.start_date, st.session_state.end_date = date_range
-start_date, end_date = st.session_state.start_date, st.session_state.end_date
+if date_range[0] != st.session_state.start_date:
+    st.session_state.start_date = date_range[0]
+if date_range[1] != st.session_state.end_date:
+    st.session_state.end_date = date_range[1]
 
+# Assign the updated session state values
+start_date, end_date = st.session_state.start_date, st.session_state.end_date
 # Fetch data using the stock ticker entered by the user
 API_KEY = 'DEMO'  # Replace with your actual API key
 url = f'https://eodhistoricaldata.com/api/eod/{stock_ticker}.US?from={start_date.strftime("%Y-%m-%d")}&to={end_date.strftime("%Y-%m-%d")}&api_token={API_KEY}&period=d'
