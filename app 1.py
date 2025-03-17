@@ -31,9 +31,14 @@ st.title("Finance Enthusiast")
 # Stock ticker input
 stock_ticker = st.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
 
-# Static date range (replace these dates as needed)
-start_date = datetime(2000, 1, 1)
-end_date = datetime.now()
+# Slider for dynamic date range selection
+start_date, end_date = st.slider(
+    "Select Date Range",
+    min_value=datetime(2000, 1, 1),
+    max_value=datetime.now(),
+    value=(datetime(2000, 1, 1), datetime.now()),
+    format="YYYY-MM-DD"
+)
 
 # Fetch data using the stock ticker entered by the user
 API_KEY = 'DEMO'  # Replace with your actual API key
