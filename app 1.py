@@ -1,7 +1,7 @@
 import pandas as pd
 import requests
 import streamlit as st
-import mplfinance as mpf
+import matplotlib.pyplot as plt
 
 # Fetch stock data using EOD API
 def fetch_apple_stock_data():
@@ -25,25 +25,19 @@ def fetch_apple_stock_data():
         stock_data['Date'] = pd.to_datetime(stock_data['date'])
         stock_data.set_index('Date', inplace=True)
 
-        # Rename columns for mplfinance compatibility
+        # Rename columns for easier usage
         stock_data = stock_data.rename(columns={
-            'open': 'Open',
-            'high': 'High',
-            'low': 'Low',
-            'close': 'Close',
-            'volume': 'Volume'
+            'close': 'Close'
         })
-        stock_data = stock_data[['Open', 'High', 'Low', 'Close', 'Volume']]  # Keep required columns
 
-        # Clean data
+        # Retain only the Date and Close columns
+        stock_data = stock_data[['Close']]
+
+        # Drop missing values
         stock_data.dropna(inplace=True)
-        stock_data = stock_data.astype({
-            "Open": "float",
-            "High": "float",
-            "Low": "float",
-            "Close": "float",
-            "Volume": "float"
-        })
+
+        # Ensure numeric data type for Close column
+        stock_data = stock_data.astype({"Close": "float"})
 
         return stock_data
     except Exception as e:
@@ -52,8 +46,8 @@ def fetch_apple_stock_data():
 
 # Main app
 def main():
-    st.title("Apple Stock Price Viewer (EOD API)")
-    st.write("This app fetches Apple (AAPL) stock data using the EOD API and visualizes it.")
+    st.title("Apple Stock Closing Price Viewer (EOD API)")
+    st.write("This app fetches Apple (AAPL) stock data using the EOD API and plots the closing price over time.")
 
     # Fetch stock data
     stock_data = fetch_apple_stock_data()
@@ -63,21 +57,19 @@ def main():
         st.write("### Data Preview")
         st.dataframe(stock_data)
 
-        # Plot candlestick chart
-        st.write("### Apple Stock Candlestick Chart")
+        # Plot closing price against date
+        st.write("### Apple Stock Closing Price Chart")
         try:
-            fig, axes = mpf.plot(
-                stock_data,
-                type='candle',
-                style='charles',
-                title="Apple Stock Prices (2000-2025)",
-                volume=True,
-                ylabel="Stock Price (USD)",
-                returnfig=True
-            )
-            st.pyplot(fig)
+            plt.figure(figsize=(12, 6))
+            plt.plot(stock_data.index, stock_data['Close'], label='Closing Price', color='blue')
+            plt.title("Apple Stock Closing Prices Over Time", fontsize=16)
+            plt.xlabel("Date", fontsize=12)
+            plt.ylabel("Closing Price (USD)", fontsize=12)
+            plt.legend(loc="upper left")
+            plt.grid(visible=True, linestyle='--', alpha=0.5)
+            st.pyplot(plt)
         except ValueError as ve:
-            st.error(f"Error plotting the candlestick chart: {ve}")
+            st.error(f"Error plotting the closing price chart: {ve}")
     else:
         st.warning("No data available. Please check the API key or date range.")
 
