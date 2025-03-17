@@ -6,12 +6,12 @@ import streamlit as st
 from matplotlib import pyplot as plt
 
 # Streamlit app title
-st.title("Apple Stock Candlestick Chart (2021 - Present)")
+st.title("Apple Stock Candlestick Chart (2000 - Present)")
 
 # Replace 'YOUR_API_KEY' with your EOD Historical Data API key
 API_KEY = 'DEMO'  # Replace with your actual API key
 symbol = 'AAPL.US'
-start_date = '2021-01-01'
+start_date = '2000-01-01'
 end_date = '2025-03-17'
 
 # Fetch EOD data
