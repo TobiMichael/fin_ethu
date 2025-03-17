@@ -1,13 +1,13 @@
 import pandas as pd
 import mplfinance as mpf
 import requests
-from io import StringIO  # Import StringIO from the io library
+from io import StringIO
 import streamlit as st
 from matplotlib import pyplot as plt
 from datetime import datetime
 
 # Set the page configuration with title and layout
-st.set_page_config(page_title="Finance Enthutisat", layout="wide")
+st.set_page_config(page_title="Finance Enthusiast", layout="wide")
 
 # Fetching Federal Reserve rate data
 def fetch_fed_rate_data():
@@ -26,30 +26,32 @@ def fetch_fed_rate_data():
     return pd.DataFrame(data)
 
 # Streamlit app title
-st.title("Finance Enthutisats")
+st.title("Finance Enthusiast")
 
-# Initialize session state for date range
-if 'date_range' not in st.session_state:
-    today = datetime.now()
-    st.session_state.date_range = (datetime(2000, 1, 1), today)
+# Initialize session state for date range if it doesn't exist
+if "start_date" not in st.session_state or "end_date" not in st.session_state:
+    st.session_state.start_date = datetime(2000, 1, 1)
+    st.session_state.end_date = datetime.now()
 
 # Sidebar widget for user input
 st.sidebar.title("Stock Ticker Input")
 stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
 
+# Get today's date dynamically
+today = datetime.now()
+
 # Single date range slider at the top of the screen
-today = datetime.now()  # Get today's date dynamically
 date_range = st.slider(
     "Select Date Range:",
     min_value=datetime(2000, 1, 1),
     max_value=today,
-    value=st.session_state.date_range,  # Set session state value
+    value=(st.session_state.start_date, st.session_state.end_date),
     format="YYYY-MM-DD"
 )
 
 # Update session state with the selected range
-st.session_state.date_range = date_range
-start_date, end_date = date_range
+st.session_state.start_date, st.session_state.end_date = date_range
+start_date, end_date = st.session_state.start_date, st.session_state.end_date
 
 # Fetch data using the stock ticker entered by the user
 API_KEY = 'DEMO'  # Replace with your actual API key
