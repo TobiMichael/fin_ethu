@@ -1,43 +1,33 @@
-import requests
 import pandas as pd
+import mplfinance as mpf
+import requests
+from io import StringIO  # Import StringIO from the io library
 import streamlit as st
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 
 # Streamlit app title
-st.title("Stock Price Viewer")
+st.title("Apple Stock Candlestick Chart (2000 - Present)")
 
-# EOD API configuration
-api_key = "DEMO"  # Replace with your EOD API key
-ticker = st.text_input("Enter Stock Ticker (e.g., AAPL.US):", "AAPL.US")  # User input for ticker
-start_date = st.date_input("Start Date", pd.to_datetime("2023-02-01"))  # User input for start date
-end_date = st.date_input("End Date", pd.to_datetime("2023-03-01"))  # User input for end date
+# Replace 'YOUR_API_KEY' with your EOD Historical Data API key
+API_KEY = 'DEMO'  # Replace with your actual API key
+symbol = 'AAPL.US'
+start_date = '2000-01-01'
+end_date = '2025-03-17'
 
-# Fetch stock data from EOD API
-if st.button("Fetch Data"):  # Button to trigger data fetching
-    url = f"https://eodhistoricaldata.com/api/eod/{ticker}?from={start_date}&to={end_date}&api_token={api_key}&fmt=json"
-    response = requests.get(url)
+# Fetch EOD data
+url = f'https://eodhistoricaldata.com/api/eod/{symbol}?from={start_date}&to={end_date}&api_token={API_KEY}&period=d'
+response = requests.get(url)
+data = response.text
 
-    if response.status_code == 200:
-        data = response.json()
-        # Convert to DataFrame
-        df = pd.DataFrame(data)
-        df['date'] = pd.to_datetime(df['date'])
-        df.set_index('date', inplace=True)
+# Convert the data to a DataFrame using StringIO
+df = pd.read_csv(StringIO(data))
+df['Date'] = pd.to_datetime(df['Date'])
+df.set_index('Date', inplace=True)
 
-        # Display the data as a table in Streamlit
-        st.write("### Stock Data", df)
+# Generate the candlestick plot
+st.subheader("Candlestick Chart")
+fig, ax = plt.subplots()
+mpf.plot(df, type='candle', style='yahoo', volume=True, ax=ax)
 
-        # Plot the stock data
-        st.write("### Closing Price Chart")
-        plt.figure(figsize=(10, 6))
-        plt.plot(df.index, df['close'], label='Closing Price', color='blue')
-        plt.title(f"{ticker} Stock Price ({start_date} to {end_date})")
-        plt.xlabel("Date")
-        plt.ylabel("Price (USD)")
-        plt.legend()
-        plt.grid()
-
-        # Render the plot in Streamlit
-        st.pyplot(plt)
-    else:
-        st.error(f"Failed to fetch data: {response.status_code}")
+# Render the plot in Streamlit
+st.pyplot(fig)
