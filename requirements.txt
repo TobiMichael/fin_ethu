@@ -1,5 +1,4 @@
 pandas
-matplotlib
 mplfinance
 requests
-python==3.9.7
+streamlit
