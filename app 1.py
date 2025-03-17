@@ -6,7 +6,7 @@ import mplfinance as mpf
 # Fetch stock data using EOD API
 def fetch_apple_stock_data():
     api_key = "DEMO"  # Replace with your EOD API key
-    symbol = "AAPL.US"  # EOD API format for Apple stock
+    symbol = "AAPL.US"  # Apple stock in EOD API format
     start_date = "2000-01-01"
     end_date = "2025-03-10"
 
@@ -15,17 +15,17 @@ def fetch_apple_stock_data():
 
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+        response.raise_for_status()  # Raise error for bad responses (4xx or 5xx)
 
-        # Parse the JSON response
+        # Parse JSON response
         data = response.json()
-
-        # Convert to DataFrame
         stock_data = pd.DataFrame(data)
+
+        # Process and clean the DataFrame
         stock_data['Date'] = pd.to_datetime(stock_data['date'])
         stock_data.set_index('Date', inplace=True)
 
-        # Keep only required columns and rename them for mplfinance
+        # Rename columns for mplfinance compatibility
         stock_data = stock_data.rename(columns={
             'open': 'Open',
             'high': 'High',
@@ -33,9 +33,10 @@ def fetch_apple_stock_data():
             'close': 'Close',
             'volume': 'Volume'
         })
-        stock_data = stock_data[['Open', 'High', 'Low', 'Close', 'Volume']]
+        stock_data = stock_data[['Open', 'High', 'Low', 'Close', 'Volume']]  # Keep required columns
 
-        # Ensure numeric data
+        # Clean data
+        stock_data.dropna(inplace=True)
         stock_data = stock_data.astype({
             "Open": "float",
             "High": "float",
@@ -46,7 +47,7 @@ def fetch_apple_stock_data():
 
         return stock_data
     except Exception as e:
-        st.error(f"Error fetching stock data: {e}")
+        st.error(f"Error fetching or processing Apple stock data: {e}")
         return pd.DataFrame()
 
 # Main app
