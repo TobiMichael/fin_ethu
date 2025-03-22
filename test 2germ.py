@@ -103,7 +103,7 @@ def analyze_stock(ticker, start_date):
         else:
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
-        plt.tight_layout()
+        plt.tight_layout(pad=3.0) # Add space between subplots
         return fig
 
     except Exception as e:
@@ -130,7 +130,7 @@ def main():
 
     if st.session_state.fig:
         st.pyplot(st.session_state.fig)
-        st.session_state.fig = None # clear session state after display.
+        st.session_state.fig = None
 
 if __name__ == "__main__":
     main()
