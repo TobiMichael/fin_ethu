@@ -111,7 +111,7 @@ def analyze_stock(ticker, start_date):
         return None
 
 def main():
-    st.title("Stock Analysis")
+    st.title("Finance Enthusiast") # Changed title here
 
     with st.sidebar:
         ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
