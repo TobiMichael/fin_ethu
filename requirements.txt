@@ -5,3 +5,6 @@ streamlit
 matplotlib
 lxml
 html5lib
+
+yfinance
+pytz
