@@ -103,7 +103,7 @@ def analyze_stock(ticker, start_date):
 
         # Subplot 3: Revenue (Bar Chart)
         if not revenue_data.empty:
-            axes[2].bar(revenue_data.index, revenue_data.values, color='green', width=20) # thicker bars
+            axes[2].bar(revenue_data.index, revenue_data.values, color='green', width=70) # thicker bars
             axes[2].set_title(f'{ticker} Revenue from {start_date}')
             axes[2].set_xlabel('Date')
             axes[2].set_ylabel('Revenue')
@@ -113,7 +113,7 @@ def analyze_stock(ticker, start_date):
 
         # Subplot 4: Dividends (Bar Chart)
         if not dividends.empty:
-            axes[3].bar(dividends.index, dividends.values, color='orange', width=20) # thicker bars
+            axes[3].bar(dividends.index, dividends.values, color='orange', width=70) # thicker bars
             axes[3].set_title(f'{ticker} Dividends from {start_date}')
             axes[3].set_xlabel('Date')
             axes[3].set_ylabel('Dividend Amount')
