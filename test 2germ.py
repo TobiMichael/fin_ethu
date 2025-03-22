@@ -101,25 +101,23 @@ def analyze_stock(ticker, start_date):
         axes[1].legend()
         axes[1].grid(True)
 
-        # Subplot 3: Revenue
+        # Subplot 3: Revenue (Bar Chart)
         if not revenue_data.empty:
-            axes[2].plot(revenue_data.index, revenue_data.values, label='Revenue', color='green')
+            axes[2].bar(revenue_data.index, revenue_data.values, color='green')
             axes[2].set_title(f'{ticker} Revenue from {start_date}')
             axes[2].set_xlabel('Date')
             axes[2].set_ylabel('Revenue')
-            axes[2].legend()
-            axes[2].grid(True)
+            axes[2].grid(axis='y') # grid only for the y axis.
         else:
             axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
 
-        # Subplot 4: Dividends
+        # Subplot 4: Dividends (Bar Chart)
         if not dividends.empty:
-            axes[3].plot(dividends.index, dividends.values, label='Dividends', color='orange', marker='o')
+            axes[3].bar(dividends.index, dividends.values, color='orange')
             axes[3].set_title(f'{ticker} Dividends from {start_date}')
             axes[3].set_xlabel('Date')
             axes[3].set_ylabel('Dividend Amount')
-            axes[3].legend()
-            axes[3].grid(True)
+            axes[3].grid(axis='y') # grid only for the y axis.
         else:
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
@@ -143,7 +141,7 @@ def main():
         start_year = st.number_input("Enter start year:", min_value=1900, max_value=datetime.now().year, step=1, value=datetime.now().year - 5)
         if st.button("Analyze"):
             try:
-                start_date_str = f"{start_year}-01-01" # Format to YYYY-01-01
+                start_date_str = f"{start_year}-01-01"
                 st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker, start_date_str)
             except Exception as e:
                 st.error(f"An error occurred: {e}")
