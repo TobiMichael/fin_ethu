@@ -90,6 +90,8 @@ def analyze_stock(ticker, start_date):
         axes[0].set_ylabel('Price')
         axes[0].legend()
         axes[0].grid(True)
+        fig.patch.set_alpha(0) # set figure background transparent
+        axes[0].patch.set_alpha(0) # set axes background transparent
 
         # Subplot 2: RSI
         axes[1].plot(stock_data['RSI'], label='RSI', color='purple')
@@ -100,6 +102,7 @@ def analyze_stock(ticker, start_date):
         axes[1].axhline(30, color='green', linestyle='--', label='Oversold (30)')
         axes[1].legend()
         axes[1].grid(True)
+        axes[1].patch.set_alpha(0) # set axes background transparent
 
         # Subplot 3: Revenue
         if not revenue_data.empty:
@@ -109,6 +112,7 @@ def analyze_stock(ticker, start_date):
             axes[2].set_ylabel('Revenue')
             axes[2].legend()
             axes[2].grid(True)
+            axes[2].patch.set_alpha(0) # set axes background transparent
         else:
             axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
 
@@ -120,11 +124,12 @@ def analyze_stock(ticker, start_date):
             axes[3].set_ylabel('Dividend Amount')
             axes[3].legend()
             axes[3].grid(True)
+            axes[3].patch.set_alpha(0) # set axes background transparent
         else:
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
         plt.tight_layout(pad=3.0)
-        return fig, stock_info.info.get('longName', ticker) # return figure and long name
+        return fig, stock_info.info.get('longName', ticker)
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
@@ -152,7 +157,7 @@ def main():
 
     if st.session_state.fig:
         if st.session_state.stock_name:
-            st.header(f'{st.session_state.stock_name} ({ticker})') # Display stock name
+            st.header(f'{st.session_state.stock_name} ({ticker})')
         st.pyplot(st.session_state.fig, use_container_width=True)
         st.session_state.fig = None
         st.session_state.stock_name = None
