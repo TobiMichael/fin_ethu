@@ -124,7 +124,7 @@ def analyze_stock(ticker, start_date):
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
         plt.tight_layout(pad=3.0)
-        return fig, stock_info.info.get('longName', ticker) # return figure and long name
+        return fig, stock_info.info.get('longName', ticker)
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
@@ -140,19 +140,17 @@ def main():
 
     with st.sidebar:
         ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
-        start_date_str = st.text_input("Enter start date (YYYY-MM-DD): ")
+        start_year = st.number_input("Enter start year:", min_value=1900, max_value=datetime.now().year, step=1, value=datetime.now().year - 5)
         if st.button("Analyze"):
             try:
-                datetime.strptime(start_date_str, '%Y-%m-%d')
+                start_date_str = f"{start_year}-01-01" # Format to YYYY-01-01
                 st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker, start_date_str)
-            except ValueError:
-                st.error("Invalid date format. Please use %Y-%m-%d.")
             except Exception as e:
                 st.error(f"An error occurred: {e}")
 
     if st.session_state.fig:
         if st.session_state.stock_name:
-            st.header(f'{st.session_state.stock_name} ({ticker})') # Display stock name
+            st.header(f'{st.session_state.stock_name} ({ticker})')
         st.pyplot(st.session_state.fig, use_container_width=True)
         st.session_state.fig = None
         st.session_state.stock_name = None
