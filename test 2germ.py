@@ -26,7 +26,7 @@ def analyze_stock(ticker, start_date):
 
         if stock_data.empty:
             st.error(f"No data found for {ticker} from {start_date}")
-            return None  # Return None if no data
+            return None
 
         stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
         stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
@@ -35,14 +35,23 @@ def analyze_stock(ticker, start_date):
         # Get revenue data
         stock_info = yf.Ticker(ticker)
         revenue_data = stock_info.financials.loc['Total Revenue']
-        revenue_data.index = pd.to_datetime(revenue_data.index).tz_convert('UTC')
+
+        if revenue_data.index.tz is None: # Check if index is tz-naive.
+            revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC').tz_convert('UTC')
+        else:
+            revenue_data.index = revenue_data.index.tz_convert('UTC')
 
         start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
         revenue_data = revenue_data[revenue_data.index >= start_date_utc]
 
         # Get dividend data
         dividends = stock_info.dividends
-        dividends.index = pd.to_datetime(dividends.index).tz_convert('UTC')
+
+        if dividends.index.tz is None: #check if index is tz-naive
+            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC').tz_convert('UTC')
+        else:
+            dividends.index = dividends.index.tz_convert('UTC')
+
         dividends = dividends[dividends.index >= start_date_utc]
 
         latest_data = stock_data[['Close', '50_MA', '200_MA', 'RSI']].tail(1)
@@ -95,8 +104,8 @@ def analyze_stock(ticker, start_date):
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
         plt.tight_layout()
-        st.pyplot(fig) #streamlit displays the plot.
-        return fig #return the figure
+        st.pyplot(fig)
+        return fig
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
@@ -113,7 +122,7 @@ def main():
             datetime.strptime(start_date_str, '%Y-%m-%d')
             analyze_stock(ticker, start_date_str)
         except ValueError:
-            st.error("Invalid date format. Please use YYYY-MM-DD.")
+            st.error("Invalid date format. Please use %Y-%m-%d.")
         except Exception as e:
             st.error(f"An error occurred: {e}")
 
