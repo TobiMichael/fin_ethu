@@ -104,7 +104,7 @@ def analyze_stock(ticker, start_date):
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
         plt.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(fig) #Place chart in the app body.
         return fig
 
     except Exception as e:
