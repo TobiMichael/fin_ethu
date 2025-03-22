@@ -6,13 +6,13 @@ from datetime import datetime
 import pytz
 
 # Set Streamlit theme to match app's theme
-st.set_page_config(layout="wide") # optional, makes app wider
+st.set_page_config(layout="wide")
 st.markdown(
     """
     <style>
     body {
-        color: #333;  /* Adjust text color */
-        background-color: #f0f2f6; /* Adjust background color */
+        color: #333;
+        background-color: #f0f2f6;
     }
     .stPlot {
         padding: 10px;
@@ -124,17 +124,19 @@ def analyze_stock(ticker, start_date):
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
         plt.tight_layout(pad=3.0)
-        return fig
+        return fig, stock_info.info.get('longName', ticker) # return figure and long name
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-        return None
+        return None, None
 
 def main():
     st.title("Finance Enthusiast")
 
     if 'fig' not in st.session_state:
         st.session_state.fig = None
+    if 'stock_name' not in st.session_state:
+        st.session_state.stock_name = None
 
     with st.sidebar:
         ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
@@ -142,15 +144,18 @@ def main():
         if st.button("Analyze"):
             try:
                 datetime.strptime(start_date_str, '%Y-%m-%d')
-                st.session_state.fig = analyze_stock(ticker, start_date_str)
+                st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker, start_date_str)
             except ValueError:
                 st.error("Invalid date format. Please use %Y-%m-%d.")
             except Exception as e:
                 st.error(f"An error occurred: {e}")
 
     if st.session_state.fig:
+        if st.session_state.stock_name:
+            st.header(f'{st.session_state.stock_name} ({ticker})') # Display stock name
         st.pyplot(st.session_state.fig, use_container_width=True)
         st.session_state.fig = None
+        st.session_state.stock_name = None
 
 if __name__ == "__main__":
     main()
