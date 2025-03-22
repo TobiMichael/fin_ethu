@@ -15,7 +15,6 @@ st.markdown(
         background-color: #f0f2f6; /* Adjust background color */
     }
     .stPlot {
-        background-color: #ffffff; /* Chart background color */
         padding: 10px;
         border-radius: 5px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -91,7 +90,6 @@ def analyze_stock(ticker, start_date):
         axes[0].set_ylabel('Price')
         axes[0].legend()
         axes[0].grid(True)
-        axes[0].set_facecolor('#f0f2f6') # match background
 
         # Subplot 2: RSI
         axes[1].plot(stock_data['RSI'], label='RSI', color='purple')
@@ -102,7 +100,6 @@ def analyze_stock(ticker, start_date):
         axes[1].axhline(30, color='green', linestyle='--', label='Oversold (30)')
         axes[1].legend()
         axes[1].grid(True)
-        axes[1].set_facecolor('#f0f2f6') # match background
 
         # Subplot 3: Revenue
         if not revenue_data.empty:
@@ -112,7 +109,6 @@ def analyze_stock(ticker, start_date):
             axes[2].set_ylabel('Revenue')
             axes[2].legend()
             axes[2].grid(True)
-            axes[2].set_facecolor('#f0f2f6') # match background
         else:
             axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
 
@@ -124,7 +120,6 @@ def analyze_stock(ticker, start_date):
             axes[3].set_ylabel('Dividend Amount')
             axes[3].legend()
             axes[3].grid(True)
-            axes[3].set_facecolor('#f0f2f6') # match background
         else:
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
@@ -154,7 +149,7 @@ def main():
                 st.error(f"An error occurred: {e}")
 
     if st.session_state.fig:
-        st.pyplot(st.session_state.fig, use_container_width=True) # use container width.
+        st.pyplot(st.session_state.fig, use_container_width=True)
         st.session_state.fig = None
 
 if __name__ == "__main__":
