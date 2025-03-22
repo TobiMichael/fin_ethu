@@ -1,97 +1,130 @@
-import pandas as pd
-import mplfinance as mpf
-import requests
-from io import StringIO
 import streamlit as st
-from matplotlib import pyplot as plt
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
 from datetime import datetime
+import pytz
 
-# Set the page configuration with title and layout
-st.set_page_config(page_title="Finance Enthusiast", layout="wide")
+def calculate_rsi(data, window=14):
+    """Calculates the Relative Strength Index (RSI)."""
+    delta = data['Close'].diff()
+    up = delta.clip(lower=0)
+    down = -1 * delta.clip(upper=0)
+    average_up = up.rolling(window).mean()
+    average_down = down.rolling(window).mean()
+    rs = average_up / average_down
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-# Fetching Federal Reserve rate data
-def fetch_fed_rate_data():
-    dates = pd.date_range(start='2000-01-01', end=datetime.now().strftime('%Y-%m-%d'), freq='AS')
-    rates = [6.5, 6.0, 1.75, 1.0, 2.0, 3.25, 0.0, 0.25, 0.5, 2.0, 2.25, 0.25, 
-             0.1, 0.25, 0.75, 1.5, 2.5, 2.25, 4.5, 4.75, 5.0, 5.5, 5.0, 5.25, 5.5]
+def analyze_stock(ticker, start_date):
+    """
+    Analyzes a stock using yfinance, calculates moving averages and RSI,
+    displays data, and generates charts including revenue and dividends.
+    """
+    try:
+        stock_data = yf.download(ticker, start=start_date)
 
-    if len(rates) < len(dates):
-        rates.extend([None] * (len(dates) - len(rates)))
+        if stock_data.empty:
+            st.error(f"No data found for {ticker} from {start_date}")
+            return None
 
-    data = {
-        'Date': dates,
-        'Rate': rates
-    }
+        stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
+        stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
+        stock_data['RSI'] = calculate_rsi(stock_data)
 
-    return pd.DataFrame(data)
+        # Get revenue data
+        stock_info = yf.Ticker(ticker)
+        revenue_data = stock_info.financials.loc['Total Revenue']
 
-# Streamlit app title
-st.title("Finance Enthusiast")
+        if revenue_data.index.tz is None: # Check if index is tz-naive.
+            revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC').tz_convert('UTC')
+        else:
+            revenue_data.index = revenue_data.index.tz_convert('UTC')
 
-# Initialize session state for date range if it doesn't exist
-if "start_date" not in st.session_state or "end_date" not in st.session_state:
-    st.session_state.start_date = datetime(2000, 1, 1)
-    st.session_state.end_date = datetime.now()
+        start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+        revenue_data = revenue_data[revenue_data.index >= start_date_utc]
 
-# Sidebar widget for user input
-st.sidebar.title("Stock Ticker Input")
-stock_ticker = st.sidebar.text_input("Enter Stock Ticker:", "AAPL")  # Default value is "AAPL"
+        # Get dividend data
+        dividends = stock_info.dividends
 
-# Initialize session state for start and end dates if not set
-if "start_date" not in st.session_state:
-    st.session_state.start_date = datetime(2000, 1, 1)
-if "end_date" not in st.session_state:
-    st.session_state.end_date = datetime.now()
+        if dividends.index.tz is None: #check if index is tz-naive
+            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC').tz_convert('UTC')
+        else:
+            dividends.index = dividends.index.tz_convert('UTC')
 
-# Get today's date dynamically
-today = datetime.now()
+        dividends = dividends[dividends.index >= start_date_utc]
 
-# Single date range slider at the top of the screen
-date_range = st.slider(
-    "Select Date Range:",
-    min_value=datetime(2000, 1, 1),
-    max_value=today,
-    value=(st.session_state.start_date, st.session_state.end_date),
-    format="YYYY-MM-DD"
-)
+        latest_data = stock_data[['Close', '50_MA', '200_MA', 'RSI']].tail(1)
 
-# Update session state with the selected range
-if date_range[0] != st.session_state.start_date:
-    st.session_state.start_date = date_range[0]
-if date_range[1] != st.session_state.end_date:
-    st.session_state.end_date = date_range[1]
+        st.write(f"\nAnalysis for {ticker} (Last Trading Day, from {start_date}):")
+        st.write(latest_data)
 
-# Assign the updated session state values
-start_date, end_date = st.session_state.start_date, st.session_state.end_date
-# Fetch data using the stock ticker entered by the user
-API_KEY = 'DEMO'  # Replace with your actual API key
-url = f'https://eodhistoricaldata.com/api/eod/{stock_ticker}.US?from={start_date.strftime("%Y-%m-%d")}&to={end_date.strftime("%Y-%m-%d")}&api_token={API_KEY}&period=d'
+        fig, axes = plt.subplots(4, 1, figsize=(12, 14))
 
-response = requests.get(url)
-data = response.text
+        # Subplot 1: Price and Moving Averages
+        axes[0].plot(stock_data['Close'], label='Close Price')
+        axes[0].plot(stock_data['50_MA'], label='50-Day MA')
+        axes[0].plot(stock_data['200_MA'], label='200-Day MA')
+        axes[0].set_title(f'{ticker} Price and Moving Averages from {start_date}')
+        axes[0].set_xlabel('Date')
+        axes[0].set_ylabel('Price')
+        axes[0].legend()
+        axes[0].grid(True)
 
-# Convert the data to a DataFrame using StringIO
-df = pd.read_csv(StringIO(data))
-df['Date'] = pd.to_datetime(df['Date'])
-df.set_index('Date', inplace=True)
+        # Subplot 2: RSI
+        axes[1].plot(stock_data['RSI'], label='RSI', color='purple')
+        axes[1].set_title(f'{ticker} RSI from {start_date}')
+        axes[1].set_xlabel('Date')
+        axes[1].set_ylabel('RSI')
+        axes[1].axhline(70, color='red', linestyle='--', label='Overbought (70)')
+        axes[1].axhline(30, color='green', linestyle='--', label='Oversold (30)')
+        axes[1].legend()
+        axes[1].grid(True)
 
-# Generate the candlestick chart
-if not df.empty:
-    fig, ax_candles = plt.subplots(figsize=(12, 6))  # Create figure for candlestick chart
-    mpf.plot(df, type='candle', style='yahoo', ax=ax_candles)  # Plot candlestick chart
-    st.subheader(f"{stock_ticker.upper()} Stock Candlestick Chart")
-    st.pyplot(fig)
-else:
-    st.warning(f"No data available for the stock ticker: {stock_ticker.upper()}")
+        # Subplot 3: Revenue
+        if not revenue_data.empty:
+            axes[2].plot(revenue_data.index, revenue_data.values, label='Revenue', color='green')
+            axes[2].set_title(f'{ticker} Revenue from {start_date}')
+            axes[2].set_xlabel('Date')
+            axes[2].set_ylabel('Revenue')
+            axes[2].legend()
+            axes[2].grid(True)
+        else:
+            axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
 
-# Fetch and process Fed rate data
-fed_data = fetch_fed_rate_data()
-if not fed_data.empty:
-    fed_data['Date'] = pd.to_datetime(fed_data['Date'])
-    
-    # Filter Fed rate data by the selected date range
-    fed_data_filtered = fed_data[(fed_data['Date'] >= start_date) & (fed_data['Date'] <= end_date)]
-    
-    # Generate the Fed rate chart
-    st.subheader("Federal Reserve Rate Chart")
-    st.line_chart(fed_data_filtered.set_index('Date'))
+        # Subplot 4: Dividends
+        if not dividends.empty:
+            axes[3].plot(dividends.index, dividends.values, label='Dividends', color='orange', marker='o')
+            axes[3].set_title(f'{ticker} Dividends from {start_date}')
+            axes[3].set_xlabel('Date')
+            axes[3].set_ylabel('Dividend Amount')
+            axes[3].legend()
+            axes[3].grid(True)
+        else:
+            axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
+
+        plt.tight_layout()
+        st.pyplot(fig)
+        return fig
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        return None
+
+def main():
+    st.title("Stock Analysis")
+
+    ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
+    start_date_str = st.text_input("Enter start date (YYYY-MM-DD): ")
+
+    if st.button("Analyze"):
+        try:
+            datetime.strptime(start_date_str, '%Y-%m-%d')
+            analyze_stock(ticker, start_date_str)
+        except ValueError:
+            st.error("Invalid date format. Please use %Y-%m-%d.")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
