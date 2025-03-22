@@ -36,7 +36,7 @@ def analyze_stock(ticker, start_date):
         stock_info = yf.Ticker(ticker)
         revenue_data = stock_info.financials.loc['Total Revenue']
 
-        if revenue_data.index.tz is None: # Check if index is tz-naive.
+        if revenue_data.index.tz is None:  # Check if index is tz-naive.
             revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC').tz_convert('UTC')
         else:
             revenue_data.index = revenue_data.index.tz_convert('UTC')
@@ -47,7 +47,7 @@ def analyze_stock(ticker, start_date):
         # Get dividend data
         dividends = stock_info.dividends
 
-        if dividends.index.tz is None: #check if index is tz-naive
+        if dividends.index.tz is None:  # check if index is tz-naive
             dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC').tz_convert('UTC')
         else:
             dividends.index = dividends.index.tz_convert('UTC')
@@ -114,17 +114,17 @@ def analyze_stock(ticker, start_date):
 def main():
     st.title("Stock Analysis")
 
-    ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
-    start_date_str = st.text_input("Enter start date (YYYY-MM-DD): ")
-
-    if st.button("Analyze"):
-        try:
-            datetime.strptime(start_date_str, '%Y-%m-%d')
-            analyze_stock(ticker, start_date_str)
-        except ValueError:
-            st.error("Invalid date format. Please use %Y-%m-%d.")
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+    with st.sidebar:
+        ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
+        start_date_str = st.text_input("Enter start date (YYYY-MM-DD): ")
+        if st.button("Analyze"):
+            try:
+                datetime.strptime(start_date_str, '%Y-%m-%d')
+                analyze_stock(ticker, start_date_str)
+            except ValueError:
+                st.error("Invalid date format. Please use %Y-%m-%d.")
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
