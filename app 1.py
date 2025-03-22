@@ -5,6 +5,26 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import pytz
 
+# Set Streamlit theme to match app's theme
+st.set_page_config(layout="wide")
+st.markdown(
+    """
+    <style>
+    body {
+        color: #333;
+        background-color: #f0f2f6;
+    }
+    .stPlot {
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 def calculate_rsi(data, window=14):
     """Calculates the Relative Strength Index (RSI)."""
     delta = data['Close'].diff()
@@ -36,8 +56,8 @@ def analyze_stock(ticker, start_date):
         stock_info = yf.Ticker(ticker)
         revenue_data = stock_info.financials.loc['Total Revenue']
 
-        if revenue_data.index.tz is None: # Check if index is tz-naive.
-            revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC').tz_convert('UTC')
+        if revenue_data.index.tz is None:
+            revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
         else:
             revenue_data.index = revenue_data.index.tz_convert('UTC')
 
@@ -47,8 +67,8 @@ def analyze_stock(ticker, start_date):
         # Get dividend data
         dividends = stock_info.dividends
 
-        if dividends.index.tz is None: #check if index is tz-naive
-            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC').tz_convert('UTC')
+        if dividends.index.tz is None:
+            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
         else:
             dividends.index = dividends.index.tz_convert('UTC')
 
@@ -103,28 +123,37 @@ def analyze_stock(ticker, start_date):
         else:
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
-        plt.tight_layout()
-        st.pyplot(fig)
-        return fig
+        plt.tight_layout(pad=3.0)
+        return fig, stock_info.info.get('longName', ticker)
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-        return None
+        return None, None
 
 def main():
-    st.title("Stock Analysis")
+    st.title("Finance Enthusiast")
 
-    ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
-    start_date_str = st.text_input("Enter start date (YYYY-MM-DD): ")
+    if 'fig' not in st.session_state:
+        st.session_state.fig = None
+    if 'stock_name' not in st.session_state:
+        st.session_state.stock_name = None
 
-    if st.button("Analyze"):
-        try:
-            datetime.strptime(start_date_str, '%Y-%m-%d')
-            analyze_stock(ticker, start_date_str)
-        except ValueError:
-            st.error("Invalid date format. Please use %Y-%m-%d.")
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+    with st.sidebar:
+        ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
+        start_year = st.number_input("Enter start year:", min_value=1900, max_value=datetime.now().year, step=1, value=datetime.now().year - 5)
+        if st.button("Analyze"):
+            try:
+                start_date_str = f"{start_year}-01-01" # Format to YYYY-01-01
+                st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker, start_date_str)
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+
+    if st.session_state.fig:
+        if st.session_state.stock_name:
+            st.header(f'{st.session_state.stock_name} ({ticker})')
+        st.pyplot(st.session_state.fig, use_container_width=True)
+        st.session_state.fig = None
+        st.session_state.stock_name = None
 
 if __name__ == "__main__":
     main()
