@@ -7,19 +7,29 @@ import pytz
 
 # Set Streamlit theme to match app's theme
 st.set_page_config(layout="wide")
+
+# Function to get text and background colors based on theme
+def get_colors():
+    is_dark_theme = st.config.get_option("theme.base") == "dark"
+    text_color = "#FFFFFF" if is_dark_theme else "#333333"
+    background_color = "#111111" if is_dark_theme else "#f0f2f6"
+    return text_color, background_color
+
+text_color, background_color = get_colors()
+
 st.markdown(
-    """
+    f"""
     <style>
-    body {
-        color: #333;
-        background-color: #f0f2f6;
-    }
-    .stPlot {
+    body {{
+        color: {text_color};
+        background-color: {background_color};
+    }}
+    .stPlot {{
         padding: 10px;
         border-radius: 5px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         margin-bottom: 20px;
-    }
+    }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -85,48 +95,56 @@ def analyze_stock(ticker, start_date):
         axes[0].plot(stock_data['Close'], label='Close Price')
         axes[0].plot(stock_data['50_MA'], label='50-Day MA')
         axes[0].plot(stock_data['200_MA'], label='200-Day MA')
-        axes[0].set_title(f'{ticker} Price and Moving Averages from {start_date}')
-        axes[0].set_xlabel('Date')
-        axes[0].set_ylabel('Price')
-        axes[0].legend()
+        axes[0].set_title(f'{ticker} Price and Moving Averages from {start_date}', color=text_color)
+        axes[0].set_xlabel('Date', color=text_color)
+        axes[0].set_ylabel('Price', color=text_color)
+        axes[0].tick_params(axis='x', colors=text_color)
+        axes[0].tick_params(axis='y', colors=text_color)
+        axes[0].legend(labelcolor=text_color)
         axes[0].grid(True)
-        fig.patch.set_alpha(0) # set figure background transparent
-        axes[0].patch.set_alpha(0) # set axes background transparent
+        fig.patch.set_alpha(0)
+        axes[0].patch.set_alpha(0)
 
         # Subplot 2: RSI
         axes[1].plot(stock_data['RSI'], label='RSI', color='purple')
-        axes[1].set_title(f'{ticker} RSI from {start_date}')
-        axes[1].set_xlabel('Date')
-        axes[1].set_ylabel('RSI')
+        axes[1].set_title(f'{ticker} RSI from {start_date}', color=text_color)
+        axes[1].set_xlabel('Date', color=text_color)
+        axes[1].set_ylabel('RSI', color=text_color)
+        axes[1].tick_params(axis='x', colors=text_color)
+        axes[1].tick_params(axis='y', colors=text_color)
         axes[1].axhline(70, color='red', linestyle='--', label='Overbought (70)')
         axes[1].axhline(30, color='green', linestyle='--', label='Oversold (30)')
-        axes[1].legend()
+        axes[1].legend(labelcolor=text_color)
         axes[1].grid(True)
-        axes[1].patch.set_alpha(0) # set axes background transparent
+        axes[1].patch.set_alpha(0)
 
         # Subplot 3: Revenue
         if not revenue_data.empty:
             axes[2].plot(revenue_data.index, revenue_data.values, label='Revenue', color='green')
-            axes[2].set_title(f'{ticker} Revenue from {start_date}')
-            axes[2].set_xlabel('Date')
-            axes[2].set_ylabel('Revenue')
-            axes[2].legend()
+            axes[2].set_title(f'{ticker} Revenue from {start_date}', color=text_color)
+            axes[2].set_xlabel('Date', color=text_color)
+            axes[2].set_ylabel('Revenue', color=text_color)
+            axes[2].tick_params(axis='x', colors=text_color)
+            axes[2].tick_params(axis='y', colors=text_color)
+            axes[2].legend(labelcolor=text_color)
             axes[2].grid(True)
-            axes[2].patch.set_alpha(0) # set axes background transparent
+            axes[2].patch.set_alpha(0)
         else:
-            axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
+            axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes, color=text_color)
 
         # Subplot 4: Dividends
         if not dividends.empty:
             axes[3].plot(dividends.index, dividends.values, label='Dividends', color='orange', marker='o')
-            axes[3].set_title(f'{ticker} Dividends from {start_date}')
-            axes[3].set_xlabel('Date')
-            axes[3].set_ylabel('Dividend Amount')
-            axes[3].legend()
+            axes[3].set_title(f'{ticker} Dividends from {start_date}', color=text_color)
+            axes[3].set_xlabel('Date', color=text_color)
+            axes[3].set_ylabel('Dividend Amount', color=text_color)
+            axes[3].tick_params(axis='x', colors=text_color)
+            axes[3].tick_params(axis='y', colors=text_color)
+            axes[3].legend(labelcolor=text_color)
             axes[3].grid(True)
-            axes[3].patch.set_alpha(0) # set axes background transparent
+            axes[3].patch.set_alpha(0)
         else:
-            axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
+            axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes, color=text_color)
 
         plt.tight_layout(pad=3.0)
         return fig, stock_info.info.get('longName', ticker)
@@ -144,23 +162,4 @@ def main():
         st.session_state.stock_name = None
 
     with st.sidebar:
-        ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
-        start_date_str = st.text_input("Enter start date (YYYY-MM-DD): ")
-        if st.button("Analyze"):
-            try:
-                datetime.strptime(start_date_str, '%Y-%m-%d')
-                st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker, start_date_str)
-            except ValueError:
-                st.error("Invalid date format. Please use %Y-%m-%d.")
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
-
-    if st.session_state.fig:
-        if st.session_state.stock_name:
-            st.header(f'{st.session_state.stock_name} ({ticker})')
-        st.pyplot(st.session_state.fig, use_container_width=True)
-        st.session_state.fig = None
-        st.session_state.stock_name = None
-
-if __name__ == "__main__":
-    main()
+        ticker = st.text_input
