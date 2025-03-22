@@ -36,8 +36,8 @@ def analyze_stock(ticker, start_date):
         stock_info = yf.Ticker(ticker)
         revenue_data = stock_info.financials.loc['Total Revenue']
 
-        if revenue_data.index.tz is None:  # Check if index is tz-naive.
-            revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC').tz_convert('UTC')
+        if revenue_data.index.tz is None:
+            revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
         else:
             revenue_data.index = revenue_data.index.tz_convert('UTC')
 
@@ -47,8 +47,8 @@ def analyze_stock(ticker, start_date):
         # Get dividend data
         dividends = stock_info.dividends
 
-        if dividends.index.tz is None:  # check if index is tz-naive
-            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC').tz_convert('UTC')
+        if dividends.index.tz is None:
+            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
         else:
             dividends.index = dividends.index.tz_convert('UTC')
 
@@ -104,8 +104,7 @@ def analyze_stock(ticker, start_date):
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
 
         plt.tight_layout()
-        st.pyplot(fig) #Place chart in the app body.
-        return fig
+        return fig # return the figure
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
@@ -120,7 +119,10 @@ def main():
         if st.button("Analyze"):
             try:
                 datetime.strptime(start_date_str, '%Y-%m-%d')
-                analyze_stock(ticker, start_date_str)
+                fig = analyze_stock(ticker, start_date_str) # capture the returned figure.
+                if fig:
+                    st.pyplot(fig) # display the figure in the main body.
+
             except ValueError:
                 st.error("Invalid date format. Please use %Y-%m-%d.")
             except Exception as e:
