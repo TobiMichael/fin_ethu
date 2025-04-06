@@ -8,3 +8,4 @@ html5lib
 
 yfinance
 pytz
+plotly
