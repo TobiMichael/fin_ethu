@@ -43,6 +43,17 @@ def analyze_stock(ticker, start_date):
             st.error(f"No data found for {ticker} from {start_date}")
             return
 
+        # --- Troubleshooting Data ---
+        st.subheader("Raw Stock Data (Head):")
+        st.write(stock_data.head())
+        st.subheader("NaN Values in Close Price:")
+        st.write(f"Number of NaN values in Close: {stock_data['Close'].isnull().sum()}")
+        st.subheader("50-Day Moving Average (Head):")
+        st.write(stock_data['50_MA'].head(55) if '50_MA' in stock_data.columns else "50-Day MA not calculated yet.")
+        st.subheader("200-Day Moving Average (Head):")
+        st.write(stock_data['200_MA'].head(205) if '200_MA' in stock_data.columns else "200-Day MA not calculated yet.")
+        # --- End Troubleshooting Data ---
+
         stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
         stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
         stock_data['RSI'] = calculate_rsi(stock_data)
