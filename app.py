@@ -4,6 +4,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 import pytz
+import spacy  # For basic NLP tasks
+
+# Load a small English NLP model from spaCy
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    st.warning("Downloading en_core_web_sm model for spaCy. This might take a moment.")
+    import spacy.cli
+    spacy.cli.download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 # Set Streamlit theme to match app's theme
 st.set_page_config(layout="wide")
@@ -36,17 +46,32 @@ def calculate_rsi(data, window=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+def interpret_rsi(rsi_value):
+    """Provides a simple textual interpretation of the RSI."""
+    if rsi_value is not None:
+        if rsi_value > 70:
+            return "The RSI suggests the stock may be overbought, potentially indicating a possibility of a price correction."
+        elif rsi_value < 30:
+            return "The RSI suggests the stock may be oversold, potentially indicating a possibility of a price increase."
+        elif 50 < rsi_value <= 70:
+            return "The RSI indicates an upward trend but is not yet in overbought territory."
+        elif 30 <= rsi_value < 50:
+            return "The RSI indicates a downward trend but is not yet in oversold territory."
+        else:
+            return "The RSI is in a neutral zone, suggesting no strong upward or downward momentum."
+    return "RSI value is not available for interpretation."
+
 def analyze_stock(ticker, start_date):
     """
     Analyzes a stock using yfinance, calculates moving averages and RSI,
-    displays data, and generates charts including revenue, dividends, and free cash flow.
+    displays data, generates charts, and provides NLP interpretation of RSI.
     """
     try:
         stock_data = yf.download(ticker, start=start_date)
 
         if stock_data.empty:
             st.error(f"No data found for {ticker} from {start_date}")
-            return None
+            return None, None
 
         stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
         stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
@@ -56,6 +81,9 @@ def analyze_stock(ticker, start_date):
         stock_info = yf.Ticker(ticker)
         financials = stock_info.financials
         cashflow = stock_info.cashflow
+        dividends = stock_info.dividends
+
+        start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
 
         # Get revenue data
         if 'Total Revenue' in financials.index:
@@ -64,19 +92,13 @@ def analyze_stock(ticker, start_date):
                 revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
             else:
                 revenue_data.index = revenue_data.index.tz_convert('UTC')
-            start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
             revenue_data = revenue_data[revenue_data.index >= start_date_utc]
         else:
-            revenue_data = pd.Series()  # Empty series if revenue data is not available
+            revenue_data = pd.Series()
 
         # Get dividend data
-        dividends = stock_info.dividends
-        if dividends.index.tz is None:
-            dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
-        else:
-            dividends.index = dividends.index.tz_convert('UTC')
-        start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
-        dividends = dividends[dividends.index >= start_date_utc]
+        dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC') if not dividends.empty and dividends.index.tz is None else dividends.index.tz_convert('UTC') if not dividends.empty else dividends.index
+        dividends = dividends[dividends.index >= start_date_utc] if not dividends.empty else dividends
 
         # Get free cash flow data
         if 'Free Cash Flow' in cashflow.index:
@@ -85,15 +107,15 @@ def analyze_stock(ticker, start_date):
                 fcf_data.index = pd.to_datetime(fcf_data.index).tz_localize('UTC')
             else:
                 fcf_data.index = fcf_data.index.tz_convert('UTC')
-            start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
             fcf_data = fcf_data[fcf_data.index >= start_date_utc]
         else:
-            fcf_data = pd.Series()  # Empty series if FCF data is not available
+            fcf_data = pd.Series()
 
         latest_data = stock_data[['Close', '50_MA', '200_MA', 'RSI']].tail(1)
 
-        st.write(f"\nAnalysis for {ticker} (Last Trading Day, from {start_date}):")
-        st.write(latest_data)
+        # NLP Interpretation
+        latest_rsi = latest_data['RSI'].iloc[0] if not latest_data.empty else None
+        rsi_interpretation = interpret_rsi(latest_rsi)
 
         fig, axes = plt.subplots(5, 1, figsize=(12, 18))
 
@@ -148,11 +170,11 @@ def analyze_stock(ticker, start_date):
             axes[4].text(0.5, 0.5, "Free Cash Flow Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[4].transAxes)
 
         plt.tight_layout(pad=3.0)
-        return fig, stock_info.info.get('longName', ticker)
+        return fig, stock_info.info.get('longName', ticker), rsi_interpretation
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-        return None, None
+        return None, None, None
 
 def main():
     st.title("Finance Enthusiast")
@@ -161,16 +183,25 @@ def main():
         st.session_state.fig = None
     if 'stock_name' not in st.session_state:
         st.session_state.stock_name = None
+    if 'rsi_interpretation' not in st.session_state:
+        st.session_state.rsi_interpretation = None
 
     with st.sidebar:
+        st.header("Analysis Options")
         ticker = st.text_input("Enter stock ticker symbol (e.g., AAPL): ").upper()
         start_year = st.number_input("Enter start year:", min_value=1900, max_value=datetime.now().year, step=1, value=datetime.now().year - 5)
         if st.button("Analyze"):
             try:
                 start_date_str = f"{start_year}-01-01"
-                st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker, start_date_str)
+                st.session_state.fig, st.session_state.stock_name, st.session_state.rsi_interpretation = analyze_stock(ticker, start_date_str)
             except Exception as e:
                 st.error(f"An error occurred: {e}")
+
+        st.sidebar.header("NLP Interpretation")
+        if st.session_state.rsi_interpretation:
+            st.sidebar.info(st.session_state.rsi_interpretation)
+        else:
+            st.sidebar.info("No NLP interpretation available yet. Please analyze a stock.")
 
     if st.session_state.fig:
         if st.session_state.stock_name:
@@ -178,6 +209,7 @@ def main():
         st.pyplot(st.session_state.fig, use_container_width=True)
         st.session_state.fig = None
         st.session_state.stock_name = None
+        st.session_state.rsi_interpretation = None
 
 if __name__ == "__main__":
     main()
