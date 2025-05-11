@@ -232,6 +232,83 @@ def plot_revenue_data(df, symbol):
         logging.error(error_message, exc_info=True)
         return None
 
+def get_dividend_data(symbol, start_date, end_date):
+    """
+    Fetches dividend data from yfinance.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the dividend data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching dividend data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        dividends = stock.dividends
+        if dividends.empty:
+            logging.warning(f"No dividend data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame
+        dividends_df = pd.DataFrame(dividends)
+        dividends_df.index = pd.to_datetime(dividends_df.index)
+        dividends_df = dividends_df.sort_index()
+        
+        # Filter by date range
+        dividends_df = dividends_df[(dividends_df.index >= start_date) & (dividends_df.index <= end_date)]
+
+        logging.info(f"Successfully fetched dividend data for {symbol}")
+        return dividends_df
+    except Exception as e:
+        error_message = f"Error fetching dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_dividend_data(df, symbol):
+    """
+    Plots the dividend data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the dividend data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The dividend plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_dividend_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the dividend plot
+        fig_dividend = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Dividends'],
+            name='Dividends',
+            marker_color='green'
+        )])
+
+        # Define the layout for the dividend plot
+        fig_dividend.update_layout(
+            title=f'{symbol} Dividends',
+            xaxis_title='Date',
+            yaxis_title='Dividends (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted dividend data for {symbol}")
+        return fig_dividend
+    except Exception as e:
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
 
 def get_economic_data(start_date, end_date):
     """
@@ -441,6 +518,19 @@ def main():
             st.plotly_chart(stock_fig, use_container_width=True)
         else:
             st.warning("No stock plot to display.")  # show a warning message
+
+        # Fetch and plot dividend data in expander
+        with st.expander("Dividends"):
+            dividend_df = get_dividend_data(stock_symbol, start_date, end_date)
+            if dividend_df is not None:
+                dividend_fig = plot_dividend_data(dividend_df, stock_symbol)
+                if dividend_fig is not None:
+                    st.plotly_chart(dividend_fig, use_container_width=True)
+                else:
+                    st.warning("No dividend plot to display.")
+            else:
+                st.info("Dividend data is not available for this stock within the selected date range.")
+
     else:
         st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
 
@@ -483,4 +573,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
