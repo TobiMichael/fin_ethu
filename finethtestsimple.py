@@ -64,7 +64,7 @@ def plot_stock_data(df, symbol):
         yaxis_title='Price (USD)',
         legend_title='Legend',
         template='plotly_dark',
-        yaxis_type="log", #log scale is always used
+        yaxis_type="log",  # log scale is always used
         height=500,
     )
     return fig
@@ -82,10 +82,10 @@ def main():
     # Date range selection using buttons
     today = datetime.today()
     years = [1, 5, 10, 20, 25]
-    cols = st.columns(len(years)) # create as many columns as there are years
+    cols = st.columns(len(years))  # create as many columns as there are years
     selected_time_frame = 5  # Default to 5 years
     for i, year in enumerate(years):
-        with cols[i]: #iterate through the columns
+        with cols[i]:  # iterate through the columns
             if st.button(f"{year} Year{'s' if year > 1 else ''}"):
                 selected_time_frame = year
     start_date = today - relativedelta(years=selected_time_frame)
@@ -96,11 +96,12 @@ def main():
     if df is not None:
         fig = plot_stock_data(df, stock_symbol)
         if fig is not None:
-            st.plotly_chart(fig, use_container_width=True)
+            # Use st.plotly_chart with expand=True
+            st.plotly_chart(fig, use_container_width=True,  height=500)
         else:
-            st.warning("No plot to display.") # show a warning message
+            st.warning("No plot to display.")  # show a warning message
     else:
-        st.info("Please enter a valid stock symbol and date range.") # show an info message
+        st.info("Please enter a valid stock symbol and date range.")  # show an info message
 
 if __name__ == "__main__":
     main()
