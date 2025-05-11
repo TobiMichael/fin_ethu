@@ -110,8 +110,8 @@ def get_economic_data(start_date, end_date):
         end_date_str = end_date.strftime('%Y-%m-%d')
 
         # FRED API URLs
-        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key=YOUR_API_KEY&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
-        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=YOUR_API_KEY&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
+        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key=5f722c7cb457ce85f5d483c2d32497c5&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
+        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=5f722c7cb457ce85f5d483c2d32497c5&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
 
         # Fetch data
         try:
