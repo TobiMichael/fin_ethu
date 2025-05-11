@@ -58,7 +58,7 @@ def get_stock_data(symbol, start_date, end_date):
 
 def plot_stock_data(df, symbol):
     """
-    Plots the stock price as a candlestick chart, moving averages, and RSI.
+    Plots the stock price as a candlestick chart and moving averages.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the stock data.
@@ -84,30 +84,14 @@ def plot_stock_data(df, symbol):
         fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
         fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
 
-        # Add the RSI subplot
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=df['RSI'],
-            name='RSI',
-            line=dict(color='blue'),
-            yaxis='y2'  # Use the second y-axis
-        ))
-
-        # Define the layout, including the second y-axis
         fig.update_layout(
-            title=f'{symbol} Stock Price with Moving Averages (Weekly) and RSI',
+            title=f'{symbol} Stock Price with Moving Averages (Weekly)',
             xaxis_title='Date',
             yaxis_title='Price (USD)',
-            yaxis2=dict(  # Define the second y-axis
-                title='RSI',
-                overlaying='y',
-                side='right',
-                range=[0, 100]  # RSI range is typically 0-100
-            ),
             legend_title='Legend',
             template='plotly_dark',
             yaxis_type="log",
-            height=600,  # Increased height to accommodate the RSI plot
+            height=500,
         )
         logging.info(f"Successfully plotted stock data for {symbol}")
         return fig
@@ -117,6 +101,46 @@ def plot_stock_data(df, symbol):
         logging.error(error_message, exc_info=True)
         return None
 
+def plot_rsi_data(df, symbol):
+    """
+    Plots the RSI data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the stock data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The RSI plot, or None if the DataFrame is empty or RSI is missing.
+    """
+    if df is None or df.empty or 'RSI' not in df:
+        logging.warning(f"plot_rsi_data called with empty DataFrame or missing RSI for symbol {symbol}")
+        return None
+
+    try:
+        # Create the RSI plot
+        fig_rsi = go.Figure(data=[go.Scatter(
+            x=df.index,
+            y=df['RSI'],
+            name='RSI',
+            line=dict(color='blue')
+        )])
+
+        # Define the layout for the RSI plot
+        fig_rsi.update_layout(
+            title=f'{symbol} Relative Strength Index (RSI)',
+            xaxis_title='Date',
+            yaxis_title='RSI',
+            template='plotly_dark',
+            height=300,
+            yaxis_range=[0, 100]  # Ensure y-axis range is 0-100 for RSI
+        )
+        logging.info(f"Successfully plotted RSI data for {symbol}")
+        return fig_rsi
+    except Exception as e:
+        error_message = f"Error plotting RSI data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
 
 
 def get_economic_data(start_date, end_date):
@@ -327,6 +351,14 @@ def main():
             st.plotly_chart(stock_fig, use_container_width=True)
         else:
             st.warning("No stock plot to display.")  # show a warning message
+
+        # Plot RSI data
+        rsi_fig = plot_rsi_data(stock_df, stock_symbol)
+        if rsi_fig is not None:
+            st.plotly_chart(rsi_fig, use_container_width=True)
+        else:
+            st.warning("No RSI plot to display.")
+
     else:
         st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
     
@@ -372,4 +404,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
