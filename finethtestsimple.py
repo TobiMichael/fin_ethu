@@ -33,7 +33,7 @@ def get_stock_data(symbol, start_date, end_date):
         st.error(f"An error occurred while fetching data for {symbol}: {e}")
         return None
 
-def plot_stock_data(df, symbol, use_log_scale):
+def plot_stock_data(df, symbol, use_log_scale=True): #log scale is default
     """
     Plots the stock price as a candlestick chart and moving averages.
 
@@ -88,7 +88,7 @@ def main():
     end_date = today
 
     # Logarithmic scale option
-    use_log_scale = st.checkbox("Use Logarithmic Y-Axis Scale")
+    use_log_scale = st.checkbox("Use Logarithmic Y-Axis Scale", value=True) # Log scale is default
 
     # Fetch and plot data
     df = get_stock_data(stock_symbol, start_date, end_date)
