@@ -91,22 +91,15 @@ def main():
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
-    # State management for chart visibility
-    show_chart = st.session_state.get('show_chart', True) # True by default
-
-    # Button to toggle chart visibility
-    if st.button(f"{'Hide' if show_chart else 'Show'} Chart"):
-        st.session_state.show_chart = not st.session_state.show_chart #invert the boolean
-
     # Fetch and plot data
     df = get_stock_data(stock_symbol, start_date, end_date)
-    if df is not None and show_chart: # only show chart if show_chart is True
+    if df is not None:
         fig = plot_stock_data(df, stock_symbol)
         if fig is not None:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No plot to display.")  # show a warning message
-    elif df is None:
+    else:
         st.info("Please enter a valid stock symbol and date range.")  # show an info message
 
 if __name__ == "__main__":
