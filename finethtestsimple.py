@@ -40,6 +40,14 @@ def get_stock_data(symbol, start_date, end_date):
         # Calculate moving averages
         df['MA50'] = df['Close'].rolling(window=50).mean()
         df['MA200'] = df['Close'].rolling(window=200).mean()
+
+        # Calculate RSI
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+
         logging.info(f"Successfully fetched and processed stock data for {symbol}")
         return df
     except Exception as e:
@@ -50,7 +58,7 @@ def get_stock_data(symbol, start_date, end_date):
 
 def plot_stock_data(df, symbol):
     """
-    Plots the stock price as a candlestick chart and moving averages.
+    Plots the stock price as a candlestick chart, moving averages, and RSI.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the stock data.
@@ -64,6 +72,7 @@ def plot_stock_data(df, symbol):
         return None
 
     try:
+        # Create the candlestick chart
         fig = go.Figure(data=[go.Candlestick(
             x=df.index,
             open=df['Open'],
@@ -75,14 +84,30 @@ def plot_stock_data(df, symbol):
         fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
         fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
 
+        # Add the RSI subplot
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=df['RSI'],
+            name='RSI',
+            line=dict(color='blue'),
+            yaxis='y2'  # Use the second y-axis
+        ))
+
+        # Define the layout, including the second y-axis
         fig.update_layout(
-            title=f'{symbol} Stock Price with Moving Averages (Weekly)',
+            title=f'{symbol} Stock Price with Moving Averages (Weekly) and RSI',
             xaxis_title='Date',
             yaxis_title='Price (USD)',
+            yaxis2=dict(  # Define the second y-axis
+                title='RSI',
+                overlaying='y',
+                side='right',
+                range=[0, 100]  # RSI range is typically 0-100
+            ),
             legend_title='Legend',
             template='plotly_dark',
-            yaxis_type="log",  # log scale is always used
-            height=500,
+            yaxis_type="log",
+            height=600,  # Increased height to accommodate the RSI plot
         )
         logging.info(f"Successfully plotted stock data for {symbol}")
         return fig
@@ -347,3 +372,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
