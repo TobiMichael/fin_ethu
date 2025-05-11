@@ -307,7 +307,6 @@ def main():
     
     # Fetch and plot economic data in expander
     with st.expander("Economic Data: Federal Funds Rate and GDP"):
-        st.markdown(""):
         economic_df = get_economic_data(start_date, end_date)
         if economic_df is not None:
             economic_fig = plot_economic_data(economic_df)
