@@ -308,13 +308,7 @@ def main():
     # Fetch and plot economic data in expander
     with st.expander("Economic Data: Federal Funds Rate and GDP"):
         st.markdown("""
-            ## Federal Funds Rate and GDP
 
-            This section displays the historical trend of the US Federal Funds Rate and the US GDP.
-
-            -   **Federal Funds Rate:** The interest rate at which banks lend to each other overnight.  It is a key indicator of monetary policy.
-            -   **GDP (Gross Domestic Product):** The total monetary value of all final goods and services produced within a country's borders during a specific time period.  It is a primary indicator of a country's economic health.
-            """)
         economic_df = get_economic_data(start_date, end_date)
         if economic_df is not None:
             economic_fig = plot_economic_data(economic_df)
