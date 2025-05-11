@@ -193,4 +193,171 @@ def get_revenue_data(symbol, start_date, end_date):
         logging.error(error_message, exc_info=True)
         return None
 
-def plot_revenue_data(df, symbo
+def plot_revenue_data(df, symbol):
+    """
+    Plots the revenue data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the revenue data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The revenue plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_revenue_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the revenue plot
+        fig_revenue = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df.iloc[:, 0],  # Use the first column for revenue data
+            name='Revenue',
+            marker_color='purple'
+        )])
+
+        # Define the layout for the revenue plot
+        fig_revenue.update_layout(
+            title=f'{symbol} Quarterly Revenue',
+            xaxis_title='Date',
+            yaxis_title='Revenue',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted revenue data for {symbol}")
+        return fig_revenue
+    except Exception as e:
+        error_message = f"Error plotting revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def get_dividend_data(symbol, start_date, end_date):
+    """
+    Fetches dividend data from yfinance.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the dividend data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching dividend data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        dividends = stock.dividends
+        if dividends.empty:
+            logging.warning(f"No dividend data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame
+        dividends_df = pd.DataFrame(dividends)
+        dividends_df.index = pd.to_datetime(dividends_df.index)
+
+        # Filter by date range, handling timezones
+        start_date_tz = start_date.replace(tzinfo=pytz.utc)  # Ensure start_date is UTC
+        end_date_tz = end_date.replace(tzinfo=pytz.utc)      # Ensure end_date is UTC
+
+        dividends_df = dividends_df[(dividends_df.index >= start_date_tz) & (dividends_df.index <= end_date_tz)]
+        dividends_df = dividends_df.sort_index()
+
+        logging.info(f"Successfully fetched dividend data for {symbol}")
+        return dividends_df
+    except Exception as e:
+        error_message = f"Error fetching dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_dividend_data(df, symbol):
+    """
+    Plots the dividend data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the dividend data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The dividend plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_dividend_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the dividend plot
+        fig_dividend = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Dividends'],
+            name='Dividends',
+            marker_color='green'
+        )])
+
+        # Define the layout for the dividend plot
+        fig_dividend.update_layout(
+            title=f'{symbol} Dividends',
+            xaxis_title='Date',
+            yaxis_title='Dividends (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted dividend data for {symbol}")
+        return fig_dividend
+    except Exception as e:
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+def get_economic_data(start_date, end_date):
+    """
+    Fetches US Federal Funds Rate and GDP data from the Federal Reserve API (FRED).
+
+    Args:
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the Fed Funds Rate and GDP data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching economic data from {start_date} to {end_date}")
+        # Convert dates to string format required by FRED API
+        start_date_str = start_date.strftime('%Y-%m-%d')
+        end_date_str = end_date.strftime('%Y-%m-%d')
+
+        # FRED API URLs
+        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+
+        # Fetch data
+        try:
+            ffr_response = requests.get(ffr_url)
+            ffr_response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            gdp_response = requests.get(gdp_url)
+            gdp_response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            error_message = f"Error fetching data from FRED API: {e}"
+            st.error(error_message)
+            logging.error(error_message, exc_info=True)
+            return None
+
+        # Parse JSON responses
+        try:
+            ffr_data = json.loads(ffr_response.text)
+            gdp_data = json.loads(gdp_response.text)
+        except json.JSONDecodeError as e:
+            error_message = f"Error decoding JSON response from FRED API: {e}"
+            st.error(error_message)
+            logging.error(error_message, exc_info=True)
+            return None
+
+
+        # Convert data to pandas DataFrames
+        ffr_df = pd.DataFrame
