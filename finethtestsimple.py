@@ -142,49 +142,7 @@ def plot_rsi_data(df, symbol):
         logging.error(error_message, exc_info=True)
         return None
 
-def plot_returns_data(df, symbol):
-    """
-    Plots the stock returns.
 
-    Args:
-        df (pandas.DataFrame): The DataFrame containing the stock data.
-        symbol (str): The stock symbol.
-
-    Returns:
-        plotly.graph_objects.Figure: The returns plot, or None if the DataFrame is empty or returns cannot be calculated.
-    """
-    if df is None or df.empty:
-        logging.warning(f"plot_returns_data called with empty DataFrame for symbol {symbol}")
-        return None
-
-    try:
-        # Calculate returns
-        df['Returns'] = df['Close'].pct_change() * 100
-        df = df.dropna()  # Drop the first row with NaN return
-
-        # Create the returns plot
-        fig_returns = go.Figure(data=[go.Scatter(
-            x=df.index,
-            y=df['Returns'],
-            name='Returns',
-            line=dict(color='green')
-        )])
-
-        # Define the layout for the returns plot
-        fig_returns.update_layout(
-            title=f'{symbol} Stock Returns (Weekly)',
-            xaxis_title='Date',
-            yaxis_title='Returns (%)',
-            template='plotly_dark',
-            height=300,
-        )
-        logging.info(f"Successfully plotted returns data for {symbol}")
-        return fig_returns
-    except Exception as e:
-        error_message = f"Error plotting returns data for {symbol}: {e}"
-        st.error(error_message)
-        logging.error(error_message, exc_info=True)
-        return None
 
 def get_revenue_data(symbol):
     """
@@ -480,23 +438,17 @@ def main():
         else:
             st.warning("No stock plot to display.")  # show a warning message
 
-        # Plot returns data
-        returns_fig = plot_returns_data(stock_df, stock_symbol)
-        if returns_fig is not None:
-            st.plotly_chart(returns_fig, use_container_width=True)
-        else:
-            st.warning("No returns plot to display.")
-
-        # Fetch and plot revenue data
-        revenue_df = get_revenue_data(stock_symbol)
-        if revenue_df is not None:
-            revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
-            if revenue_fig is not None:
-                st.plotly_chart(revenue_fig, use_container_width=True)
+        # Fetch and plot revenue data in expander
+        with st.expander("Quarterly Revenue"):
+            revenue_df = get_revenue_data(stock_symbol)
+            if revenue_df is not None:
+                revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
+                if revenue_fig is not None:
+                    st.plotly_chart(revenue_fig, use_container_width=True)
+                else:
+                    st.warning("No revenue plot to display.")
             else:
-                st.warning("No revenue plot to display.")
-        else:
-            st.info("Revenue data is not available for this stock.")
+                st.info("Revenue data is not available for this stock.")
 
     else:
         st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
