@@ -11,9 +11,6 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
-#  API Key
-FRED_API_KEY = "YOUR_API_KEY" # Replace with user provided API Key
-
 def get_stock_data(symbol, start_date, end_date):
     """
     Fetches stock data from yfinance and calculates moving averages.
@@ -113,8 +110,8 @@ def get_economic_data(start_date, end_date):
         end_date_str = end_date.strftime('%Y-%m-%d')
 
         # FRED API URLs
-        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
-        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key=YOUR_API_KEY&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
+        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=YOUR_API_KEY&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
 
         # Fetch data
         try:
@@ -230,4 +227,101 @@ def plot_economic_data(df):
                 ),
                 legend_title='Legend',
                 template='plotly_dark',
-                hei
+                height=500,
+            )
+        elif 'Fed Funds Rate' in df.columns:
+            fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
+            fig.update_layout(
+                title='US Federal Funds Rate',
+                xaxis_title='Date',
+                yaxis_title='Fed Funds Rate (%)',
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        elif 'GDP' in df.columns:
+            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green')))
+            fig.update_layout(
+                title='US GDP',
+                xaxis_title='Date',
+                yaxis_title='US GDP (Billions USD)',
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        else:
+            error_message = "No valid data to plot in economic data"
+            st.error(error_message)
+            logging.error(error_message)
+            return None
+        
+        logging.info("Successfully plotted economic data.")
+        return fig
+    except Exception as e:
+        error_message = f"Error plotting economic data: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+
+def main():
+    """
+    Main function to run the Streamlit application.
+    """
+    st.title('Stock and Economic Data App')
+
+    # Stock input with default value
+    default_stock = "AAPL"  # Set Apple as the default
+    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
+
+    # Date range selection using buttons
+    today = datetime.today()
+    years = [1, 5, 10, 20, 25]
+    cols = st.columns(len(years))  # create as many columns as there are years
+    selected_time_frame = 5  # Default to 5 years
+    for i, year in enumerate(years):
+        with cols[i]:  # iterate through the columns
+            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
+                selected_time_frame = year
+    start_date = today - relativedelta(years=selected_time_frame)
+    end_date = today
+
+    # State management for chart visibility
+    show_stock_chart = st.session_state.get('show_stock_chart', True)
+    show_economic_chart = st.session_state.get('show_economic_chart', True)
+
+    # Buttons to toggle chart visibility
+    cols = st.columns(2)  # Create two columns for the buttons
+    with cols[0]:
+        if st.button(f"{'Hide' if show_stock_chart else 'Show'} Stock Chart"):
+            st.session_state.show_stock_chart = not st.session_state.show_stock_chart
+    with cols[1]:
+        if st.button(f"{'Hide' if show_economic_chart else 'Show'} Economic Chart"):
+            st.session_state.show_economic_chart = not st.session_state.show_economic_chart
+
+    # Fetch and plot stock data
+    stock_df = get_stock_data(stock_symbol, start_date, end_date)
+    if stock_df is not None and show_stock_chart:
+        stock_fig = plot_stock_data(stock_df, stock_symbol)
+        if stock_fig is not None:
+            st.plotly_chart(stock_fig, use_container_width=True)
+        else:
+            st.warning("No stock plot to display.")  # show a warning message
+    elif stock_df is None and show_stock_chart:
+        st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
+        
+
+    # Fetch and plot economic data
+    economic_df = get_economic_data(start_date, end_date)
+    if economic_df is not None and show_economic_chart:
+        economic_fig = plot_economic_data(economic_df)
+        if economic_fig is not None:
+            st.plotly_chart(economic_fig, use_container_width=True)
+        else:
+            st.warning("No economic data plot to display.")
+    elif economic_df is None and show_economic_chart:
+        st.info("Unable to fetch economic data.") # Only show if user intends to see the chart
+
+if __name__ == "__main__":
+    main()
