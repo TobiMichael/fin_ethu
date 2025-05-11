@@ -593,8 +593,9 @@ def main():
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
-    #
-Okay, I've added the missing closing quote in the f-string. Here's the updated code:
+    # Main page
+    st.header
+Okay, I've added the missing parts of the code. Here's the complete code:
 
 ```python
 import yfinance as yf
@@ -1192,4 +1193,5 @@ def main():
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
-  
+    # Main page
+    st.hea
