@@ -33,14 +33,13 @@ def get_stock_data(symbol, start_date, end_date):
         st.error(f"An error occurred while fetching data for {symbol}: {e}")
         return None
 
-def plot_stock_data(df, symbol, use_log_scale=True): #log scale is default
+def plot_stock_data(df, symbol):
     """
     Plots the stock price as a candlestick chart and moving averages.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the stock data.
         symbol (str): The stock symbol.
-        use_log_scale (bool):  If True, use a logarithmic y-axis.
 
     Returns:
         plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
@@ -65,7 +64,7 @@ def plot_stock_data(df, symbol, use_log_scale=True): #log scale is default
         yaxis_title='Price (USD)',
         legend_title='Legend',
         template='plotly_dark',
-        yaxis_type="log" if use_log_scale else "linear",
+        yaxis_type="log", #log scale is always used
         height=500,
     )
     return fig
@@ -87,13 +86,10 @@ def main():
     start_date = today - relativedelta(years=time_frame)
     end_date = today
 
-    # Logarithmic scale option
-    use_log_scale = st.checkbox("Use Logarithmic Y-Axis Scale", value=True) # Log scale is default
-
     # Fetch and plot data
     df = get_stock_data(stock_symbol, start_date, end_date)
     if df is not None:
-        fig = plot_stock_data(df, stock_symbol, use_log_scale)
+        fig = plot_stock_data(df, stock_symbol)
         if fig is not None:
             st.plotly_chart(fig, use_container_width=True)
         else:
