@@ -4,6 +4,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import requests
+import json
 
 def get_stock_data(symbol, start_date, end_date):
     """
@@ -69,38 +71,104 @@ def plot_stock_data(df, symbol):
     )
     return fig
 
+
+
+def get_economic_data(start_date, end_date):
+    """
+    Fetches US Federal Funds Rate and GDP data from the Federal Reserve API (FRED).
+
+    Args:
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the Fed Funds Rate and GDP data,
+                          or None if an error occurs.
+    """
+    try:
+        # Convert dates to string format required by FRED API
+        start_date_str = start_date.strftime('%Y-%m-%d')
+        end_date_str = end_date.strftime('%Y-%m-%d')
+
+        # FRED API URLs
+        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key=YOUR_API_KEY&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
+        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=YOUR_API_KEY&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
+
+        # Fetch data
+        ffr_response = requests.get(ffr_url)
+        gdp_response = requests.get(gdp_url)
+
+        # Parse JSON responses
+        ffr_data = json.loads(ffr_response.text)
+        gdp_data = json.loads(gdp_response.text)
+
+        # Convert data to pandas DataFrames
+        ffr_df = pd.DataFrame(ffr_data['observations'])
+        gdp_df = pd.DataFrame(gdp_data['observations'])
+
+        # Convert 'date' to datetime and 'value' to numeric
+        ffr_df['date'] = pd.to_datetime(ffr_df['date'])
+        ffr_df['value'] = pd.to_numeric(ffr_df['value'], errors='coerce')  # Handle missing values
+        gdp_df['date'] = pd.to_datetime(gdp_df['date'])
+        gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')  # Handle missing values
+        
+        # Rename the 'value' column
+        ffr_df = ffr_df.rename(columns={'value': 'Fed Funds Rate'})
+        gdp_df = gdp_df.rename(columns={'value': 'GDP'})
+
+        # Merge the DataFrames on 'date'
+        economic_df = pd.merge(ffr_df, gdp_df, on='date', how='outer') # Use outer join to keep all dates
+
+        #set date as index
+        economic_df = economic_df.set_index('date')
+        
+        return economic_df
+
+    except Exception as e:
+        st.error(f"An error occurred while fetching economic data: {e}")
+        return None
+
+
+
+def plot_economic_data(df):
+    """
+    Plots the US Federal Funds Rate and GDP on the same chart.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the economic data.
+
+    Returns:
+        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        return None
+
+    fig = go.Figure()
+    # Add Fed Funds Rate trace
+    fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
+    # Add GDP trace
+    fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green'), yaxis="y2"))
+
+    # Define layout with two y-axes
+    fig.update_layout(
+        title='US Federal Funds Rate and GDP',
+        xaxis_title='Date',
+        yaxis_title='Fed Funds Rate (%)',
+        yaxis2=dict(
+            title='US GDP (Billions USD)',
+            overlaying='y',
+            side='right'
+        ),
+        legend_title='Legend',
+        template='plotly_dark',
+        height=500,
+    )
+    return fig
+
+
+
 def main():
     """
     Main function to run the Streamlit application.
     """
-    st.title('Stock Data App')
-
-    # Stock input with default value
-    default_stock = "AAPL"  # Set Apple as the default
-    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
-
-    # Date range selection using buttons
-    today = datetime.today()
-    years = [1, 5, 10, 20, 25]
-    cols = st.columns(len(years))  # create as many columns as there are years
-    selected_time_frame = 5  # Default to 5 years
-    for i, year in enumerate(years):
-        with cols[i]:  # iterate through the columns
-            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
-                selected_time_frame = year
-    start_date = today - relativedelta(years=selected_time_frame)
-    end_date = today
-
-    # Fetch and plot data
-    df = get_stock_data(stock_symbol, start_date, end_date)
-    if df is not None:
-        fig = plot_stock_data(df, stock_symbol)
-        if fig is not None:
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning("No plot to display.")  # show a warning message
-    else:
-        st.info("Please enter a valid stock symbol and date range.")  # show an info message
-
-if __name__ == "__main__":
-    main()
+    
