@@ -6,6 +6,10 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import requests
 import json
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
 def get_stock_data(symbol, start_date, end_date):
     """
@@ -21,18 +25,22 @@ def get_stock_data(symbol, start_date, end_date):
                           or None if an error occurs.
     """
     try:
+        logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
         df = stock.history(start=start_date, end=end_date, interval="1wk")  # Weekly data
         if df.empty:
             st.error(f"No data found for symbol {symbol} within the specified date range.")
+            logging.error(f"No data found for symbol {symbol} within the specified date range.")
             return None
 
         # Calculate moving averages
         df['MA50'] = df['Close'].rolling(window=50).mean()
         df['MA200'] = df['Close'].rolling(window=200).mean()
+        logging.info(f"Successfully fetched and processed stock data for {symbol}")
         return df
     except Exception as e:
         st.error(f"An error occurred while fetching data for {symbol}: {e}")
+        logging.error(f"Error fetching stock data for {symbol}: {e}", exc_info=True)
         return None
 
 def plot_stock_data(df, symbol):
@@ -47,29 +55,36 @@ def plot_stock_data(df, symbol):
         plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
     """
     if df is None or df.empty:
+        logging.warning(f"plot_stock_data called with empty DataFrame for symbol {symbol}")
         return None
 
-    fig = go.Figure(data=[go.Candlestick(
-        x=df.index,
-        open=df['Open'],
-        high=df['High'],
-        low=df['Low'],
-        close=df['Close'],
-        name=f'{symbol} Price'
-    )])
-    fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
-    fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
+    try:
+        fig = go.Figure(data=[go.Candlestick(
+            x=df.index,
+            open=df['Open'],
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            name=f'{symbol} Price'
+        )])
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
 
-    fig.update_layout(
-        title=f'{symbol} Stock Price with Moving Averages (Weekly)',
-        xaxis_title='Date',
-        yaxis_title='Price (USD)',
-        legend_title='Legend',
-        template='plotly_dark',
-        yaxis_type="log",  # log scale is always used
-        height=500,
-    )
-    return fig
+        fig.update_layout(
+            title=f'{symbol} Stock Price with Moving Averages (Weekly)',
+            xaxis_title='Date',
+            yaxis_title='Price (USD)',
+            legend_title='Legend',
+            template='plotly_dark',
+            yaxis_type="log",  # log scale is always used
+            height=500,
+        )
+        logging.info(f"Successfully plotted stock data for {symbol}")
+        return fig
+    except Exception as e:
+        st.error(f"Error plotting stock data for {symbol}: {e}")
+        logging.error(f"Error plotting stock data for {symbol}: {e}", exc_info=True)
+        return None
 
 
 
@@ -86,6 +101,7 @@ def get_economic_data(start_date, end_date):
                           or None if an error occurs.
     """
     try:
+        logging.info(f"Fetching economic data from {start_date} to {end_date}")
         # Convert dates to string format required by FRED API
         start_date_str = start_date.strftime('%Y-%m-%d')
         end_date_str = end_date.strftime('%Y-%m-%d')
@@ -95,12 +111,25 @@ def get_economic_data(start_date, end_date):
         gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=5f722c7cb457ce85f5d483c2d32497c5&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
 
         # Fetch data
-        ffr_response = requests.get(ffr_url)
-        gdp_response = requests.get(gdp_url)
+        try:
+            ffr_response = requests.get(ffr_url)
+            ffr_response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            gdp_response = requests.get(gdp_url)
+            gdp_response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching data from FRED API: {e}")
+            logging.error(f"Error fetching data from FRED API: {e}", exc_info=True)
+            return None
 
         # Parse JSON responses
-        ffr_data = json.loads(ffr_response.text)
-        gdp_data = json.loads(gdp_response.text)
+        try:
+            ffr_data = json.loads(ffr_response.text)
+            gdp_data = json.loads(gdp_response.text)
+        except json.JSONDecodeError as e:
+            st.error(f"Error decoding JSON response from FRED API: {e}")
+            logging.error(f"Error decoding JSON response from FRED API: {e}", exc_info=True)
+            return None
+
 
         # Convert data to pandas DataFrames
         ffr_df = pd.DataFrame(ffr_data['observations'])
@@ -121,11 +150,12 @@ def get_economic_data(start_date, end_date):
 
         #set date as index
         economic_df = economic_df.set_index('date')
-        
+        logging.info("Successfully fetched and processed economic data.")
         return economic_df
 
     except Exception as e:
         st.error(f"An error occurred while fetching economic data: {e}")
+        logging.error(f"Error fetching economic data: {e}", exc_info=True)
         return None
 
 
@@ -141,29 +171,36 @@ def plot_economic_data(df):
         plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
     """
     if df is None or df.empty:
+        logging.warning("plot_economic_data called with empty DataFrame")
         return None
 
-    fig = go.Figure()
-    # Add Fed Funds Rate trace
-    fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
-    # Add GDP trace
-    fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green'), yaxis="y2"))
+    try:
+        fig = go.Figure()
+        # Add Fed Funds Rate trace
+        fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
+        # Add GDP trace
+        fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green'), yaxis="y2"))
 
-    # Define layout with two y-axes
-    fig.update_layout(
-        title='US Federal Funds Rate and GDP',
-        xaxis_title='Date',
-        yaxis_title='Fed Funds Rate (%)',
-        yaxis2=dict(
-            title='US GDP (Billions USD)',
-            overlaying='y',
-            side='right'
-        ),
-        legend_title='Legend',
-        template='plotly_dark',
-        height=500,
-    )
-    return fig
+        # Define layout with two y-axes
+        fig.update_layout(
+            title='US Federal Funds Rate and GDP',
+            xaxis_title='Date',
+            yaxis_title='Fed Funds Rate (%)',
+            yaxis2=dict(
+                title='US GDP (Billions USD)',
+                overlaying='y',
+                side='right'
+            ),
+            legend_title='Legend',
+            template='plotly_dark',
+            height=500,
+        )
+        logging.info("Successfully plotted economic data.")
+        return fig
+    except Exception as e:
+        st.error(f"Error plotting economic data: {e}")
+        logging.error(f"Error plotting economic data: {e}", exc_info=True)
+        return None
 
 
 
@@ -171,4 +208,45 @@ def main():
     """
     Main function to run the Streamlit application.
     """
-    
+    st.title('Stock and Economic Data App')
+
+    # Stock input with default value
+    default_stock = "AAPL"  # Set Apple as the default
+    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
+
+    # Date range selection using buttons
+    today = datetime.today()
+    years = [1, 5, 10, 20, 25]
+    cols = st.columns(len(years))  # create as many columns as there are years
+    selected_time_frame = 5  # Default to 5 years
+    for i, year in enumerate(years):
+        with cols[i]:  # iterate through the columns
+            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
+                selected_time_frame = year
+    start_date = today - relativedelta(years=selected_time_frame)
+    end_date = today
+
+    # Fetch and plot stock data
+    stock_df = get_stock_data(stock_symbol, start_date, end_date)
+    if stock_df is not None:
+        stock_fig = plot_stock_data(stock_df, stock_symbol)
+        if stock_fig is not None:
+            st.plotly_chart(stock_fig, use_container_width=True)
+        else:
+            st.warning("No stock plot to display.")  # show a warning message
+    else:
+        st.info("Please enter a valid stock symbol and date range.")  # show an info message
+
+    # Fetch and plot economic data
+    economic_df = get_economic_data(start_date, end_date)
+    if economic_df is not None:
+        economic_fig = plot_economic_data(economic_df)
+        if economic_fig is not None:
+            st.plotly_chart(economic_fig, use_container_width=True)
+        else:
+            st.warning("No economic data plot to display.")
+    else:
+        st.info("Unable to fetch economic data.")
+
+if __name__ == "__main__":
+    main()
