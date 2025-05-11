@@ -11,6 +11,9 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
+#  API Key
+FRED_API_KEY = "YOUR_API_KEY" # Replace with user provided API Key
+
 def get_stock_data(symbol, start_date, end_date):
     """
     Fetches stock data from yfinance and calculates moving averages.
@@ -110,8 +113,8 @@ def get_economic_data(start_date, end_date):
         end_date_str = end_date.strftime('%Y-%m-%d')
 
         # FRED API URLs
-        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key=5f722c7cb457ce85f5d483c2d32497c5&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
-        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=5f722c7cb457ce85f5d483c2d32497c5&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"  # Replace YOUR_API_KEY
+        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
 
         # Fetch data
         try:
@@ -292,13 +295,16 @@ def main():
     show_economic_chart = st.session_state.get('show_economic_chart', True)
 
     # Buttons to toggle chart visibility
-    cols = st.columns(2)  # Create two columns for the buttons
-    with cols[0]:
-        if st.button(f"{'Hide' if show_stock_chart else 'Show'} Stock Chart"):
-            st.session_state.show_stock_chart = not st.session_state.show_stock_chart
-    with cols[1]:
-        if st.button(f"{'Hide' if show_economic_chart else 'Show'} Economic Chart"):
-            st.session_state.show_economic_chart = not st.session_state.show_economic_chart
+    # Use st.columns to create two columns
+    # col1, col2 = st.columns(2)
+
+    # Place each button in its own column
+    # with col1:
+    if st.button(f"{'Hide' if show_stock_chart else 'Show'} Stock Chart"):
+        st.session_state.show_stock_chart = not st.session_state.show_stock_chart
+    # with col2:
+    if st.button(f"{'Hide' if show_economic_chart else 'Show'} Economic Chart"):
+        st.session_state.show_economic_chart = not st.session_state.show_economic_chart
 
     # Fetch and plot stock data
     stock_df = get_stock_data(stock_symbol, start_date, end_date)
