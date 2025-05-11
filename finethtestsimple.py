@@ -289,7 +289,7 @@ def main():
         with cols[i]:  # iterate through the columns
             if st.button(f"{yr} Yr{'s' if yr > 1 else ''}"):
                 selected_time_frame = yr
-    start_date = today - relativedelta(yrs=selected_time_frame)
+    start_date = today - relativedelta(yr=selected_time_frame)
     end_date = today
 
     # Main page
