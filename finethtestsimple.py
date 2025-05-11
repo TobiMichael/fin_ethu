@@ -291,27 +291,4 @@ def main():
     end_date = today
 
     # Fetch and plot stock data
-    stock_df = get_stock_data(stock_symbol, start_date, end_date)
-    if stock_df is not None:
-        stock_fig = plot_stock_data(stock_df, stock_symbol)
-        if stock_fig is not None:
-            st.plotly_chart(stock_fig, use_container_width=True)
-        else:
-            st.warning("No stock plot to display.")  # show a warning message
-    else:
-        st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
-        
-
-    # Fetch and plot economic data
-    economic_df = get_economic_data(start_date, end_date)
-    if economic_df is not None:
-        economic_fig = plot_economic_data(economic_df)
-        if economic_fig is not None:
-            st.plotly_chart(economic_fig, use_container_width=True)
-        else:
-            st.warning("No economic data plot to display.")
-    else:
-        st.info("Unable to fetch economic data.") # Only show if user intends to see the chart
-
-if __name__ == "__main__":
-    main()
+    stock_df = get_stock_data(stock_symbol, start_date, end_da
