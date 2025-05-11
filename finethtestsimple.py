@@ -79,11 +79,16 @@ def main():
     default_stock = "AAPL"  # Set Apple as the default
     stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
 
-    # Date range selection
+    # Date range selection using buttons
     today = datetime.today()
     years = [1, 5, 10, 20, 25]
-    time_frame = st.selectbox("Select Time Frame", years, index=1) # Default to 5 years
-    start_date = today - relativedelta(years=time_frame)
+    cols = st.columns(len(years)) # create as many columns as there are years
+    selected_time_frame = 5  # Default to 5 years
+    for i, year in enumerate(years):
+        with cols[i]: #iterate through the columns
+            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
+                selected_time_frame = year
+    start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
     # Fetch and plot data
