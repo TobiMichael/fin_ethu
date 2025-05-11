@@ -441,21 +441,31 @@ def main():
             st.plotly_chart(stock_fig, use_container_width=True)
         else:
             st.warning("No stock plot to display.")  # show a warning message
-
-        # Fetch and plot revenue data in expander
-        with st.expander("Quarterly Revenue"):
-            revenue_df = get_revenue_data(stock_symbol, start_date, end_date)
-            if revenue_df is not None:
-                revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
-                if revenue_fig is not None:
-                    st.plotly_chart(revenue_fig, use_container_width=True)
-                else:
-                    st.warning("No revenue plot to display.")
-            else:
-                st.info("Revenue data is not available for this stock within the selected date range.")
-
     else:
         st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
+
+    # RSI Explanation
+    with st.expander("Relative Strength Index (RSI)"):
+        
+        # Plot RSI data
+        if stock_df is not None:
+            rsi_fig = plot_rsi_data(stock_df, stock_symbol)
+            if rsi_fig is not None:
+                st.plotly_chart(rsi_fig, use_container_width=True)
+            else:
+                st.warning("No RSI plot to display.")
+
+    # Fetch and plot revenue data in expander
+    with st.expander("Quarterly Revenue"):
+        revenue_df = get_revenue_data(stock_symbol, start_date, end_date)
+        if revenue_df is not None:
+            revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
+            if revenue_fig is not None:
+                st.plotly_chart(revenue_fig, use_container_width=True)
+            else:
+                st.warning("No revenue plot to display.")
+        else:
+            st.info("Revenue data is not available for this stock within the selected date range.")
     
     # Fetch and plot economic data in expander
     with st.expander("Economic Data: Federal Funds Rate and GDP"):
@@ -469,17 +479,7 @@ def main():
         else:
             st.info("Unable to fetch economic data.") # Only show if user intends to see the chart
 
-    # RSI Explanation
-    with st.expander("Relative Strength Index (RSI)"):
-        
-        # Plot RSI data
-        if stock_df is not None:
-            rsi_fig = plot_rsi_data(stock_df, stock_symbol)
-            if rsi_fig is not None:
-                st.plotly_chart(rsi_fig, use_container_width=True)
-            else:
-                st.warning("No RSI plot to display.")
+
 
 if __name__ == "__main__":
     main()
- 
