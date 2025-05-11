@@ -186,6 +186,90 @@ def plot_returns_data(df, symbol):
         logging.error(error_message, exc_info=True)
         return None
 
+def get_revenue_data(symbol):
+    """
+    Fetches revenue data from yfinance.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the revenue data,
+                          or None if an error occurs or no revenue data is available.
+    """
+    try:
+        logging.info(f"Fetching revenue data for {symbol}")
+        stock = yf.Ticker(symbol)
+        # Fetch quarterly revenue
+        revenue_data = stock.quarterly_income_stmt
+        if revenue_data is None or revenue_data.empty:
+            logging.warning(f"No revenue data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        revenue_df = revenue_data.T
+        revenue_df.index = pd.to_datetime(revenue_df.index)
+        revenue_df = revenue_df.sort_index()  # Sort by date
+
+        # Select the revenue column
+        if 'Total Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Total Revenue']]
+        elif 'Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Revenue']]
+        else:
+            logging.warning(f"No Revenue or Total Revenue column found for symbol {symbol}")
+            return None
+        
+        revenue_df = revenue_df.dropna()
+
+        logging.info(f"Successfully fetched revenue data for {symbol}")
+        return revenue_df
+    except Exception as e:
+        error_message = f"Error fetching revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_revenue_data(df, symbol):
+    """
+    Plots the revenue data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the revenue data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The revenue plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_revenue_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the revenue plot
+        fig_revenue = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df.iloc[:, 0],  # Use the first column for revenue data
+            name='Revenue',
+            marker_color='purple'
+        )])
+
+        # Define the layout for the revenue plot
+        fig_revenue.update_layout(
+            title=f'{symbol} Quarterly Revenue',
+            xaxis_title='Date',
+            yaxis_title='Revenue',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted revenue data for {symbol}")
+        return fig_revenue
+    except Exception as e:
+        error_message = f"Error plotting revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
 
 def get_economic_data(start_date, end_date):
     """
@@ -402,6 +486,17 @@ def main():
             st.plotly_chart(returns_fig, use_container_width=True)
         else:
             st.warning("No returns plot to display.")
+
+        # Fetch and plot revenue data
+        revenue_df = get_revenue_data(stock_symbol)
+        if revenue_df is not None:
+            revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
+            if revenue_fig is not None:
+                st.plotly_chart(revenue_fig, use_container_width=True)
+            else:
+                st.warning("No revenue plot to display.")
+        else:
+            st.info("Revenue data is not available for this stock.")
 
     else:
         st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
