@@ -1,4 +1,4 @@
-import yfinance as yf
+import yf as yf
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -368,31 +368,6 @@ def main():
 
     # RSI Explanation
     with st.expander("Relative Strength Index (RSI)"):
-        st.markdown("""
-            ## Relative Strength Index (RSI)
-            The Relative Strength Index (RSI) is a momentum indicator used in technical analysis that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset.
-
-            **Formula:**
-            \\( RSI = 100 - 100 / (1 + RS) \\)
-            Where:
-            - RS = Average gain of the up periods / Average loss of the down periods
-
-            **Interpretation:**
-            - RSI values range from 0 to 100.
-            - Traditionally, RSI is considered overbought when above 70 and oversold when below 30.
-            - An RSI above 70 suggests that a stock has been overbought and may be due for a trend reversal or corrective pullback.
-            - Conversely, an RSI below 30 suggests the stock is oversold and a trend reversal or corrective rally could be imminent.
-
-            **Usefulness:**
-            - RSI helps traders identify potential entry and exit points.
-            - It can be used to confirm trend direction.
-            - RSI can also warn of potential reversals or divergences.
-
-            **Disclaimer:**
-            - RSI is a technical indicator and should not be used in isolation.
-            - It is most effective when combined with other forms of technical and fundamental analysis.
-            - Past performance is not indicative of future results.
-            """, unsafe_allow_html=True)
         
         # Plot RSI data
         if stock_df is not None:
