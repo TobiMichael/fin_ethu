@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
 #  API Key
-FRED_API_KEY = "5f722c7cb457ce85f5d483c2d32497c5" # Replace with user provided API Key
+FRED_API_KEY = "YOUR_API_KEY" # Replace with user provided API Key
 
 def get_stock_data(symbol, start_date, end_date):
     """
@@ -291,4 +291,38 @@ def main():
     end_date = today
 
     # Fetch and plot stock data
-    stock_df = get_stock_data(stock_symbol, start_date, end_da
+    stock_df = get_stock_data(stock_symbol, start_date, end_date)
+    with st.container():
+        st.header(f"Stock Data for {stock_symbol}")
+        if stock_df is not None:
+            stock_fig = plot_stock_data(stock_df, stock_symbol)
+            if stock_fig is not None:
+                st.plotly_chart(stock_fig, use_container_width=True)
+            else:
+                st.warning("No stock plot to display.")  # show a warning message
+        else:
+            st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
+    
+    # Fetch and plot economic data
+    economic_df = get_economic_data(start_date, end_date)
+    with st.expander("Economic Data: Federal Funds Rate and GDP"):
+        st.markdown("""
+            ## Federal Funds Rate and GDP
+
+            This section displays the historical trend of the US Federal Funds Rate and the US GDP.
+
+            -   **Federal Funds Rate:** The interest rate at which banks lend to each other overnight.  It is a key indicator of monetary policy.
+            -   **GDP (Gross Domestic Product):** The total monetary value of all final goods and services produced within a country's borders during a specific time period.  It is a primary indicator of a country's economic health.
+            """)
+        if economic_df is not None:
+            economic_fig = plot_economic_data(economic_df)
+            if economic_fig is not None:
+                st.plotly_chart(economic_fig, use_container_width=True)
+            else:
+                st.warning("No economic data plot to display.")
+        else:
+            st.info("Unable to fetch economic data.") # Only show if user intends to see the chart
+        
+
+if __name__ == "__main__":
+    main()
