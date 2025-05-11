@@ -12,6 +12,7 @@ import logging
 logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
 #  API Key
+#    5f722c7cb457ce85f5d483c2d32497c5
 FRED_API_KEY = "5f722c7cb457ce85f5d483c2d32497c5" # Replace with user provided API Key
 
 def get_stock_data(symbol, start_date, end_date):
