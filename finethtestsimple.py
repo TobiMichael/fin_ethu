@@ -351,14 +351,6 @@ def main():
             st.plotly_chart(stock_fig, use_container_width=True)
         else:
             st.warning("No stock plot to display.")  # show a warning message
-
-        # Plot RSI data
-        rsi_fig = plot_rsi_data(stock_df, stock_symbol)
-        if rsi_fig is not None:
-            st.plotly_chart(rsi_fig, use_container_width=True)
-        else:
-            st.warning("No RSI plot to display.")
-
     else:
         st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
     
@@ -401,6 +393,14 @@ def main():
             - It is most effective when combined with other forms of technical and fundamental analysis.
             - Past performance is not indicative of future results.
             """, unsafe_allow_html=True)
+        
+        # Plot RSI data
+        if stock_df is not None:
+            rsi_fig = plot_rsi_data(stock_df, stock_symbol)
+            if rsi_fig is not None:
+                st.plotly_chart(rsi_fig, use_container_width=True)
+            else:
+                st.warning("No RSI plot to display.")
 
 if __name__ == "__main__":
     main()
