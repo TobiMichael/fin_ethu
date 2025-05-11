@@ -1,154 +1,93 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import streamlit as st
 from datetime import datetime
-import pytz # Import pytz for timezone handling
+from dateutil.relativedelta import relativedelta
 
-# Set Streamlit page configuration
-st.set_page_config(layout="wide")
-
-# Apply custom CSS for styling
-st.markdown(
+def get_stock_data(symbol, start_date, end_date):
     """
-    <style>
-    body {
-        color: #333;
-        background-color: #f0f2f6;
-    }
-    .stPlot {
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-    /* Style for the suggested ticker display */
-    .suggested-ticker {
-        background-color: #e9e9e9;
-        padding: 8px;
-        border-radius: 4px;
-        margin-top: 10px;
-        font-family: monospace;
-        font-size: 1em;
-        border: 1px solid #ccc;
-        word-break: break-all; /* Prevent long tickers/names from overflowing */
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+    Fetches stock data from yfinance and calculates moving averages.
 
-def calculate_rsi(data, window=14):
-    """Calculates the Relative Strength Index (RSI)."""
-    delta = data['Close'].diff()
-    up = delta.clip(lower=0)
-    down = -1 * delta.clip(upper=0)
-    average_up = up.rolling(window).mean()
-    average_down = down.rolling(window).mean()
-    # Avoid division by zero in rs calculation
-    # Replace 0 with a very small number (e.g., 1e-9) to prevent division by zero
-    rs = average_up / average_down.replace(0, 1e-9)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
 
-# Provided function to attempt ticker lookup by potential name/ticker
-def find_ticker_and_name(query):
-    """Attempts to find a ticker and company name from a query string using yfinance."""
-    if not query:
-        return None, None
-
-    # Try treating the query as a direct ticker first
-    ticker_obj = yf.Ticker(query.upper())
+    Returns:
+        pandas.DataFrame: A DataFrame containing the stock data,
+                          or None if an error occurs.
+    """
     try:
-        # Fetch info to validate the ticker and get the name
-        # Checking for 'regularMarketPrice' or 'marketCap' is a good way to see if the ticker is valid and has data
-        info = ticker_obj.info
-        if info and (info.get('regularMarketPrice') is not None or info.get('marketCap') is not None):
-             # If valid, return the ticker and its long name
-             return query.upper(), info.get('longName', query.upper())
-        else:
-             # If direct ticker didn't work or no price/marketCap info, it might be a name (though yfinance lookup by name is unreliable)
-             pass # Proceeding here won't magically make name search work well with yfinance
+        stock = yf.Ticker(symbol)
+        df = stock.history(start=start_date, end=end_date, interval="1mo")  # Monthly data
+        if df.empty:
+            st.error(f"No data found for symbol {symbol} within the specified date range.")
+            return None
+
+        # Calculate moving averages
+        df['MA50'] = df['Close'].rolling(window=50).mean()
+        df['MA200'] = df['Close'].rolling(window=200).mean()
+        return df
     except Exception as e:
-        # print(f"Direct ticker lookup failed for {query}: {e}") # Optional: for debugging
-        pass # It's likely not a direct valid ticker, might be a company name, but yfinance can't reliably search by name.
+        st.error(f"An error occurred while fetching data for {symbol}: {e}")
+        return None
 
-    # --- Limitation Acknowledged ---
-    # yfinance does NOT have a robust function to search for tickers by company name.
-    # A proper name-to-ticker search with suggestions requires a dedicated financial data API
-    # or a pre-compiled, searchable database, which is beyond the scope of this script
-    # using only yfinance.
-    # Therefore, the primary method here is validating if the input IS a ticker.
-
-    # If no valid ticker was found from the direct attempt
-    return None, None
-
-# Provided and completed function to analyze stock
-def analyze_stock(ticker, start_date):
+def plot_stock_data(df, symbol):
     """
-    Analyzes a stock using yfinance, calculates moving averages and RSI,
-    displays data, and generates charts including revenue, dividends, and free cash flow.
+    Plots the stock price and moving averages.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the stock data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
     """
-    try:
-        # Check if the ticker is empty before downloading
-        if not ticker:
-             st.warning("Please enter a ticker symbol to analyze.")
-             return None, None
+    if df is None or df.empty:
+        return None
 
-        stock_data = yf.download(ticker, start=start_date)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name=f'{symbol} Close Price', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
+    fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
 
-        if stock_data.empty:
-            st.error(f"No data found for ticker **{ticker}** from **{start_date}**. Please check the ticker symbol and date range.")
-            return None, None
+    fig.update_layout(
+        title=f'{symbol} Stock Price with Moving Averages (Monthly)',
+        xaxis_title='Date',
+        yaxis_title='Price (USD)',
+        legend_title='Legend',
+        template='plotly_dark'  # Use a dark theme for better visuals
+    )
+    return fig
 
-        # Calculate indicators
-        stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
-        stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
-        stock_data['RSI'] = calculate_rsi(stock_data)
+def main():
+    """
+    Main function to run the Streamlit application.
+    """
+    st.title('Stock Data App')
 
-        # Get company info, financials, and cash flow
-        stock_info = yf.Ticker(ticker)
-        info = stock_info.info # Get the info dictionary once
-        financials = stock_info.financials
-        cashflow = stock_info.cashflow
-        long_name = info.get('longName', ticker) # Get the long name, default to ticker
+    # Stock input with default value
+    default_stock = "AAPL"  # Set Apple as the default
+    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
 
-        # Helper function to process financial/cashflow data (handles timezones)
-        def process_financial_data(data_series, start_date):
-             if data_series.empty:
-                  return pd.Series()
-             try:
-                 # Attempt to localize if index is naive
-                 if data_series.index.tz is None:
-                      data_series.index = pd.to_datetime(data_series.index).tz_localize('UTC')
-                 # Convert to UTC if already timezone-aware but not UTC
-                 elif data_series.index.tz != pytz.utc:
-                       data_series.index = data_series.index.tz_convert('UTC')
-             except Exception as e:
-                 st.warning(f"Could not process date index for financial data: {e}. Skipping timezone conversion.")
-                 # Fallback: keep index as is if conversion fails
+    # Date range selection
+    today = datetime.today()
+    years = [1, 5, 10, 20, 25]
+    time_frame = st.selectbox("Select Time Frame", years, index=1) # Default to 5 years
+    start_date = today - relativedelta(years=time_frame)
+    end_date = today
 
-             start_date_utc = pd.to_datetime(start_date)
-             # Ensure start_date_utc is timezone-aware for comparison if data_series index is aware
-             if data_series.index.tz is not None:
-                 start_date_utc = start_date_utc.tz_localize(pytz.utc)
+    # Fetch and plot data
+    df = get_stock_data(stock_symbol, start_date, end_date)
+    if df is not None:
+        fig = plot_stock_data(df, stock_symbol)
+        if fig is not None:
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("No plot to display.") # show a warning message
+    else:
+        st.info("Please enter a valid stock symbol and date range.") # show an info message
 
-             return data_series[data_series.index >= start_date_utc].sort_index()
-
-
-        # Get revenue data
-        revenue_data = pd.Series()
-        if 'Total Revenue' in financials.index:
-             revenue_data = financials.loc['Total Revenue']
-             revenue_data = process_financial_data(revenue_data, start_date)
-
-
-        # Get dividend data
-        dividends = stock_info.dividends
-        dividends = process_financial_data(dividends, start_date)
-
-
-        # Get free cash flow data
-        fcf_data = pd.Series()
-        if 'Free Cash Flow' in cashflow.index:
-            fcf_data = cashflow.loc['Free Cash Flow']
+if __name__ == "__main__":
+    main()
