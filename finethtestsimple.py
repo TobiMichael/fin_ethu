@@ -3,10 +3,12 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
-import pytz
+import pytz # Import pytz for timezone handling
 
-# Set Streamlit theme
+# Set Streamlit page configuration
 st.set_page_config(layout="wide")
+
+# Apply custom CSS for styling
 st.markdown(
     """
     <style>
@@ -29,6 +31,7 @@ st.markdown(
         font-family: monospace;
         font-size: 1em;
         border: 1px solid #ccc;
+        word-break: break-all; /* Prevent long tickers/names from overflowing */
     }
     </style>
     """,
@@ -43,11 +46,12 @@ def calculate_rsi(data, window=14):
     average_up = up.rolling(window).mean()
     average_down = down.rolling(window).mean()
     # Avoid division by zero in rs calculation
+    # Replace 0 with a very small number (e.g., 1e-9) to prevent division by zero
     rs = average_up / average_down.replace(0, 1e-9)
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Function to attempt ticker lookup by potential name/ticker
+# Provided function to attempt ticker lookup by potential name/ticker
 def find_ticker_and_name(query):
     """Attempts to find a ticker and company name from a query string using yfinance."""
     if not query:
@@ -57,13 +61,13 @@ def find_ticker_and_name(query):
     ticker_obj = yf.Ticker(query.upper())
     try:
         # Fetch info to validate the ticker and get the name
-        # Checking for 'regularMarketPrice' is a good way to see if the ticker is valid
+        # Checking for 'regularMarketPrice' or 'marketCap' is a good way to see if the ticker is valid and has data
         info = ticker_obj.info
-        if info and info.get('regularMarketPrice') is not None:
+        if info and (info.get('regularMarketPrice') is not None or info.get('marketCap') is not None):
              # If valid, return the ticker and its long name
              return query.upper(), info.get('longName', query.upper())
         else:
-             # If direct ticker didn't work or no price info, it might be a name (though yfinance lookup by name is unreliable)
+             # If direct ticker didn't work or no price/marketCap info, it might be a name (though yfinance lookup by name is unreliable)
              pass # Proceeding here won't magically make name search work well with yfinance
     except Exception as e:
         # print(f"Direct ticker lookup failed for {query}: {e}") # Optional: for debugging
@@ -79,7 +83,7 @@ def find_ticker_and_name(query):
     # If no valid ticker was found from the direct attempt
     return None, None
 
-
+# Provided and completed function to analyze stock
 def analyze_stock(ticker, start_date):
     """
     Analyzes a stock using yfinance, calculates moving averages and RSI,
@@ -109,15 +113,26 @@ def analyze_stock(ticker, start_date):
         cashflow = stock_info.cashflow
         long_name = info.get('longName', ticker) # Get the long name, default to ticker
 
-        # Helper function to process financial/cashflow data
+        # Helper function to process financial/cashflow data (handles timezones)
         def process_financial_data(data_series, start_date):
              if data_series.empty:
                   return pd.Series()
-             if data_series.index.tz is None:
-                  data_series.index = pd.to_datetime(data_series.index).tz_localize('UTC')
-             else:
-                  data_series.index = data_series.index.tz_convert('UTC')
-             start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+             try:
+                 # Attempt to localize if index is naive
+                 if data_series.index.tz is None:
+                      data_series.index = pd.to_datetime(data_series.index).tz_localize('UTC')
+                 # Convert to UTC if already timezone-aware but not UTC
+                 elif data_series.index.tz != pytz.utc:
+                       data_series.index = data_series.index.tz_convert('UTC')
+             except Exception as e:
+                 st.warning(f"Could not process date index for financial data: {e}. Skipping timezone conversion.")
+                 # Fallback: keep index as is if conversion fails
+
+             start_date_utc = pd.to_datetime(start_date)
+             # Ensure start_date_utc is timezone-aware for comparison if data_series index is aware
+             if data_series.index.tz is not None:
+                 start_date_utc = start_date_utc.tz_localize(pytz.utc)
+
              return data_series[data_series.index >= start_date_utc].sort_index()
 
 
@@ -153,59 +168,64 @@ def analyze_stock(ticker, start_date):
         axes[0].plot(stock_data.index, stock_data['200_MA'], label='200-Day MA')
         axes[0].set_title(f'{long_name} ({ticker}) Price and Moving Averages from {start_date}')
         axes[0].set_xlabel('Date')
-        axes[0].set_ylabel('Price ($)')
-        axes[0].legend()
-        axes[0].grid(True)
-
-        # Subplot 2: RSI
-        axes[1].plot(stock_data.index, stock_data['RSI'], label='RSI', color='purple')
-        axes[1].set_title(f'{long_name} ({ticker}) RSI from {start_date}')
-        axes[1].set_xlabel('Date')
-        axes[1].set_ylabel('RSI')
-        axes[1].axhline(70, color='red', linestyle='--', label='Overbought (70)')
-        axes[1].axhline(30, color='green', linestyle='--', label='Oversold (30)')
-        axes[1].legend()
-        axes[1].grid(True)
-
-        # Subplot 3: Revenue (Bar Chart)
-        if not revenue_data.empty:
-            axes[2].bar(revenue_data.index.to_numpy(), revenue_data.values, color='green', width=70)
-            axes[2].set_title(f'{long_name} ({ticker}) Revenue from {start_date}')
-            axes[2].set_xlabel('Date')
-            axes[2].set_ylabel('Revenue ($)')
+        axes[0].set_ylabel('Price (<span class="math-inline">\)'\)
+axes\[0\]\.legend\(\)
+axes\[0\]\.grid\(True\)
+\# Subplot 2\: RSI
+axes\[1\]\.plot\(stock\_data\.index, stock\_data\['RSI'\], label\='RSI', color\='purple'\)
+axes\[1\]\.set\_title\(f'\{long\_name\} \(\{ticker\}\) RSI from \{start\_date\}'\)
+axes\[1\]\.set\_xlabel\('Date'\)
+axes\[1\]\.set\_ylabel\('RSI'\)
+axes\[1\]\.axhline\(70, color\='red', linestyle\='\-\-', label\='Overbought \(70\)'\)
+axes\[1\]\.axhline\(30, color\='green', linestyle\='\-\-', label\='Oversold \(30\)'\)
+axes\[1\]\.legend\(\)
+axes\[1\]\.grid\(True\)
+\# Subplot 3\: Revenue \(Bar Chart\)
+if not revenue\_data\.empty\:
+axes\[2\]\.bar\(revenue\_data\.index\.to\_numpy\(\), revenue\_data\.values, color\='green', width\=70\)
+axes\[2\]\.set\_title\(f'\{long\_name\} \(\{ticker\}\) Revenue from \{start\_date\}'\)
+axes\[2\]\.set\_xlabel\('Date'\)
+axes\[2\]\.set\_ylabel\('Revenue \(</span>)')
             axes[2].grid(axis='y')
             fig.autofmt_xdate(axes=axes[2]) # Auto format date labels
         else:
             axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
-
-        # Subplot 4: Dividends (Bar Chart)
-        if not dividends.empty:
-            axes[3].bar(dividends.index.to_numpy(), dividends.values, color='orange', width=70)
-            axes[3].set_title(f'{long_name} ({ticker}) Dividends from {start_date}')
-            axes[3].set_xlabel('Date')
-            axes[3].set_ylabel('Dividend Amount ($)')
+            axes[2].set_title(f'{long_name} ({ticker}) Revenue') # Still show title even if empty
+            axes[2].set_xlabel('Date')
+            axes[2].set_ylabel('Revenue (<span class="math-inline">\)'\)
+\# Subplot 4\: Dividends \(Bar Chart\)
+if not dividends\.empty\:
+axes\[3\]\.bar\(dividends\.index\.to\_numpy\(\), dividends\.values, color\='orange', width\=70\)
+axes\[3\]\.set\_title\(f'\{long\_name\} \(\{ticker\}\) Dividends from \{start\_date\}'\)
+axes\[3\]\.set\_xlabel\('Date'\)
+axes\[3\]\.set\_ylabel\('Dividend Amount \(</span>)')
             axes[3].grid(axis='y')
             fig.autofmt_xdate(axes=axes[3]) # Auto format date labels
         else:
             axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
-
-        # Subplot 5: Free Cash Flow (Bar Chart)
-        if not fcf_data.empty:
-            axes[4].bar(fcf_data.index.to_numpy(), fcf_data.values, color='blue', width=70)
-            axes[4].set_title(f'{long_name} ({ticker}) Free Cash Flow from {start_date}')
-            axes[4].set_xlabel('Date')
-            axes[4].set_ylabel('Free Cash Flow ($)')
+            axes[3].set_title(f'{long_name} ({ticker}) Dividends') # Still show title even if empty
+            axes[3].set_xlabel('Date')
+            axes[3].set_ylabel('Dividend Amount (<span class="math-inline">\)'\)
+\# Subplot 5\: Free Cash Flow \(Bar Chart\)
+if not fcf\_data\.empty\:
+axes\[4\]\.bar\(fcf\_data\.index\.to\_numpy\(\), fcf\_data\.values, color\='blue', width\=70\)
+axes\[4\]\.set\_title\(f'\{long\_name\} \(\{ticker\}\) Free Cash Flow from \{start\_date\}'\)
+axes\[4\]\.set\_xlabel\('Date'\)
+axes\[4\]\.set\_ylabel\('Free Cash Flow \(</span>)')
             axes[4].grid(axis='y')
             fig.autofmt_xdate(axes=axes[4]) # Auto format date labels
         else:
             axes[4].text(0.5, 0.5, "Free Cash Flow Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[4].transAxes)
+            axes[4].set_title(f'{long_name} ({ticker}) Free Cash Flow') # Still show title even if empty
+            axes[4].set_xlabel('Date')
+            axes[4].set_ylabel('Free Cash Flow ($)')
 
 
         plt.tight_layout(pad=3.0)
         return fig, long_name
 
     except Exception as e:
-        st.error(f"An error occurred while fetching data for **{ticker}**: {e}. Please verify the ticker symbol.")
+        st.error(f"An error occurred while fetching data for **{ticker}**: {e}. Please verify the ticker symbol and date range.")
         return None, None
 
 def main():
@@ -295,66 +315,3 @@ def main():
             st.warning(f"Could not find a valid ticker for '{query}'. Please try a different name or enter the exact ticker symbol.")
             st.session_state.suggested_ticker = None
             st.session_state.suggested_name = None
-
-
-    # Logic to handle the "Analyze Stock" button click
-    # This part runs outside the sidebar with block
-    if analyze_button and ticker_to_analyze:
-         # Clear previous results when a new analysis is started
-         st.session_state.fig = None
-         st.session_state.stock_name = None
-         st.session_state.current_ticker = "" # Clear before analysis
-
-         try:
-             start_date_str = f"{start_year}-01-01"
-             # Check if the ticker_to_analyze is likely valid before proceeding
-             # We do a quick check here to give faster feedback for obvious errors
-             temp_ticker_check = yf.Ticker(ticker_to_analyze)
-             # Attempt to get info - if this fails, the ticker is likely invalid
-             temp_info = temp_ticker_check.info
-             if temp_info and temp_info.get('regularMarketPrice') is not None:
-                 # Ticker seems valid, proceed with analysis
-                 st.session_state.current_ticker = ticker_to_analyze # Store the ticker being analyzed
-                 st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker_to_analyze, start_date_str)
-                 # Optionally clear the suggestion after analysis
-                 st.session_state.suggested_ticker = None
-                 st.session_state.suggested_name = None
-             else:
-                  st.error(f"Invalid or unsupported ticker symbol: **{ticker_to_analyze}**. Please enter a valid ticker symbol (e.g., AAPL, MSFT).")
-                  st.session_state.fig = None
-                  st.session_state.stock_name = None
-                  st.session_state.current_ticker = "" # Ensure this is empty on error
-
-
-         except Exception as e:
-             # Catch any other errors during analysis
-             st.error(f"An error occurred during analysis for ticker **{ticker_to_analyze}**: {e}. Please verify the ticker symbol and date range.")
-             st.session_state.fig = None
-             st.session_state.stock_name = None
-             st.session_state.current_ticker = "" # Ensure this is empty on error
-
-
-    # Handle the clear button - runs outside sidebar
-    if clear_button:
-        st.session_state.fig = None
-        st.session_state.stock_name = None
-        st.session_state.current_ticker = ""
-        st.session_state.suggested_ticker = None
-        st.session_state.suggested_name = None
-        # Clear the input fields as well by setting their state keys
-        st.session_state.query_input = ""
-        st.session_state.ticker_to_analyze_input = ""
-        st.session_state.start_year_input_analyze = datetime.now().year - 5 # Reset start year
-        st.experimental_rerun() # Rerun to clear the display and reset inputs
-
-
-    # Display results if figure exists (either from a new analysis or session state)
-    if st.session_state.fig:
-         # Use the stored stock_name or current_ticker for the header
-         display_name = st.session_state.stock_name if st.session_state.stock_name else st.session_state.current_ticker
-         st.header(f'{display_name} ({st.session_state.current_ticker}) Analysis')
-         st.pyplot(st.session_state.fig, use_container_width=True)
-         # Keep fig and name in state until cleared by the clear button
-
-if __name__ == "__main__":
-    main()
