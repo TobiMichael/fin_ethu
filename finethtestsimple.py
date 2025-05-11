@@ -96,8 +96,7 @@ def main():
     if df is not None:
         fig = plot_stock_data(df, stock_symbol)
         if fig is not None:
-            # Use st.plotly_chart with expand=True
-            st.plotly_chart(fig, use_container_width=True,  height=500)
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No plot to display.")  # show a warning message
     else:
