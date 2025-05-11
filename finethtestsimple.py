@@ -33,14 +33,13 @@ def get_stock_data(symbol, start_date, end_date):
         st.error(f"An error occurred while fetching data for {symbol}: {e}")
         return None
 
-def plot_stock_data(df, symbol, chart_height):
+def plot_stock_data(df, symbol):
     """
     Plots the stock price as a candlestick chart and moving averages.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the stock data.
         symbol (str): The stock symbol.
-        chart_height (int): The height of the chart in pixels.
 
     Returns:
         plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
@@ -65,7 +64,7 @@ def plot_stock_data(df, symbol, chart_height):
         yaxis_title='Price (USD)',
         legend_title='Legend',
         template='plotly_dark',  # Use a dark theme
-        height=chart_height, # Set the height of the chart
+        height=500, # Set a fixed height
     )
     return fig
 
@@ -86,13 +85,10 @@ def main():
     start_date = today - relativedelta(years=time_frame)
     end_date = today
 
-    # Chart height selection
-    chart_height = st.slider("Chart Height (pixels)", min_value=300, max_value=1000, value=500)
-
     # Fetch and plot data
     df = get_stock_data(stock_symbol, start_date, end_date)
     if df is not None:
-        fig = plot_stock_data(df, stock_symbol, chart_height)
+        fig = plot_stock_data(df, stock_symbol)
         if fig is not None:
             st.plotly_chart(fig, use_container_width=True)
         else:
