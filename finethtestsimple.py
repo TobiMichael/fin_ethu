@@ -553,7 +553,7 @@ def main():
     with st.expander("Quarterly Revenue"):
         revenue_df = get_revenue_data(stock_symbol, start_date, end_date)
         if revenue_df is not None:
-            revenue_fig = plot_revenue_data(revenue_df, symbol) # Fix is here
+            revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
             if revenue_fig is not None:
                 st.plotly_chart(revenue_fig, use_container_width=True)
             else:
