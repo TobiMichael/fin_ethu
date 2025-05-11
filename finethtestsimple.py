@@ -282,14 +282,14 @@ def main():
     # Date range selection using buttons in sidebar
     st.sidebar.subheader("Select Date Range")
     today = datetime.today()
-    years = [1, 5, 10, 20, 25]
-    cols = st.sidebar.columns(len(years))  # create as many columns as there are years
+    yrs = [1, 5, 10, 20, 25]
+    cols = st.sidebar.columns(len(yrs))  # create as many columns as there are years
     selected_time_frame = 5  # Default to 5 years
-    for i, year in enumerate(years):
+    for i, year in enumerate(yrs):
         with cols[i]:  # iterate through the columns
-            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
-                selected_time_frame = year
-    start_date = today - relativedelta(years=selected_time_frame)
+            if st.button(f"{yr} Year{'s' if yr > 1 else ''}"):
+                selected_time_frame = yr
+    start_date = today - relativedelta(yrs=selected_time_frame)
     end_date = today
 
     # Main page
