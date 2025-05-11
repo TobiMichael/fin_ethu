@@ -20,7 +20,7 @@ def get_stock_data(symbol, start_date, end_date):
     """
     try:
         stock = yf.Ticker(symbol)
-        df = stock.history(start=start_date, end=end_date, interval="1mo")  # Monthly data
+        df = stock.history(start=start_date, end=end_date, interval="1wk")  # Weekly data
         if df.empty:
             st.error(f"No data found for symbol {symbol} within the specified date range.")
             return None
