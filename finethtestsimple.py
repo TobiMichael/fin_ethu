@@ -103,4 +103,11 @@ def main():
     if df is not None and show_chart: # only show chart if show_chart is True
         fig = plot_stock_data(df, stock_symbol)
         if fig is not None:
-            st.plotly_chart(fig, use_container_width=Tr
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("No plot to display.")  # show a warning message
+    elif df is None:
+        st.info("Please enter a valid stock symbol and date range.")  # show an info message
+
+if __name__ == "__main__":
+    main()
