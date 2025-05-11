@@ -35,7 +35,7 @@ def get_stock_data(symbol, start_date, end_date):
 
 def plot_stock_data(df, symbol):
     """
-    Plots the stock price and moving averages.
+    Plots the stock price as a candlestick chart and moving averages.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the stock data.
@@ -47,17 +47,23 @@ def plot_stock_data(df, symbol):
     if df is None or df.empty:
         return None
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name=f'{symbol} Close Price', line=dict(color='blue')))
+    fig = go.Figure(data=[go.Candlestick(
+        x=df.index,
+        open=df['Open'],
+        high=df['High'],
+        low=df['Low'],
+        close=df['Close'],
+        name=f'{symbol} Price'
+    )])
     fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
     fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
 
     fig.update_layout(
-        title=f'{symbol} Stock Price with Moving Averages (Monthly)',
+        title=f'{symbol} Stock Price with Moving Averages (Weekly)',
         xaxis_title='Date',
         yaxis_title='Price (USD)',
         legend_title='Legend',
-        template='plotly_dark'  # Use a dark theme for better visuals
+        template='plotly_dark'  # Use a dark theme
     )
     return fig
 
