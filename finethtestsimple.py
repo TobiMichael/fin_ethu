@@ -523,21 +523,7 @@ def main():
         else:
             st.warning("No stock plot to display.")  # show a warning message
 
-        # Fetch and plot dividend data in expander
-        with st.expander("Dividends"):
-            dividend_df = get_dividend_data(stock_symbol, start_date, end_date)
-            if dividend_df is not None:
-                dividend_fig = plot_dividend_data(dividend_df, stock_symbol)
-                if dividend_fig is not None:
-                    st.plotly_chart(dividend_fig, use_container_width=True)
-                else:
-                    st.warning("No dividend plot to display.")
-            else:
-                st.info("Dividend data is not available for this stock within the selected date range.")
-
-    else:
-        st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
-
+   
     # RSI Explanation
     with st.expander("Relative Strength Index (RSI)"):
         
@@ -548,6 +534,18 @@ def main():
                 st.plotly_chart(rsi_fig, use_container_width=True)
             else:
                 st.warning("No RSI plot to display.")
+    
+    # Fetch and plot dividend data in expander
+    with st.expander("Dividends"):
+        dividend_df = get_dividend_data(stock_symbol, start_date, end_date)
+        if dividend_df is not None:
+            dividend_fig = plot_dividend_data(dividend_df, stock_symbol)
+            if dividend_fig is not None:
+                st.plotly_chart(dividend_fig, use_container_width=True)
+            else:
+                st.warning("No dividend plot to display.")
+        else:
+            st.info("Dividend data is not available for this stock within the selected date range.")
 
     # Fetch and plot revenue data in expander
     with st.expander("Quarterly Revenue"):
