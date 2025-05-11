@@ -287,7 +287,7 @@ def main():
     selected_time_frame = 5  # Default to 5 years
     for i, year in enumerate(years):
         with cols[i]:  # iterate through the columns
-            if st.button(f"<span style='font-size: 10px;'>{year} Year{'s' if year > 1 else ''}</span>",
+            if st.button(f">{year} Year{'s' if year > 1 else ''}</span>",
                        key=f"year_button_{year}"):
                 selected_time_frame = year
     start_date = today - relativedelta(years=selected_time_frame)
