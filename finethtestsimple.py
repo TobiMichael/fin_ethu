@@ -29,7 +29,7 @@ def get_stock_data(symbol, start_date, end_date):
     """
     try:
         logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
-        stock = yfpy.Share(symbol)
+        stock = yf.Ticker(symbol)
         df = stock.history(start=start_date, end=end_date, interval="1wk")  # Weekly data
         if df.empty:
             error_message = f"No data found for symbol {symbol} within the specified date range."
@@ -159,7 +159,7 @@ def get_revenue_data(symbol, start_date, end_date):
     """
     try:
         logging.info(f"Fetching revenue data for {symbol} from {start_date} to {end_date}")
-        stock = yfpy.Share(symbol)
+        stock = yf.Ticker(symbol)
         # Fetch quarterly revenue
         revenue_data = stock.quarterly_income_stmt
         if revenue_data is None or revenue_data.empty:
@@ -247,7 +247,7 @@ def get_dividend_data(symbol, start_date, end_date):
     """
     try:
         logging.info(f"Fetching dividend data for {symbol} from {start_date} to {end_date}")
-        stock = yfpy.Share(symbol)
+        stock = yf.Ticker(symbol)
         dividends = stock.dividends
         if dividends.empty:
             logging.warning(f"No dividend data found for symbol {symbol}")
@@ -523,7 +523,7 @@ def main():
         with st.expander("Dividends"):
             dividend_df = get_dividend_data(stock_symbol, start_date, end_date)
             if dividend_df is not None:
-                dividend_fig = plot_dividend_data(dividend_df, stock_symbol)
+                dividend_fig = plot_dividend_data(dividend_df, symbol)
                 if dividend_fig is not None:
                     st.plotly_chart(dividend_fig, use_container_width=True)
                 else:
@@ -535,7 +535,7 @@ def main():
         with st.expander("Quarterly Revenue"):
             revenue_df = get_revenue_data(stock_symbol, start_date, end_date)
             if revenue_df is not None:
-                revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
+                revenue_fig = plot_revenue_data(revenue_df, symbol)
                 if revenue_fig is not None:
                     st.plotly_chart(revenue_fig, use_container_width=True)
                 else:
