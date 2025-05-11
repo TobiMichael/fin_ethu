@@ -12,8 +12,7 @@ import logging
 logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
 #  API Key
-#    5f722c7cb457ce85f5d483c2d32497c5
-FRED_API_KEY = "5f722c7cb457ce85f5d483c2d32497c5" # Replace with user provided API Key
+FRED_API_KEY = "5f722c7cb457ce85f5d483c2d32497c5"  # Replace with user provided API Key
 
 def get_stock_data(symbol, start_date, end_date):
     """
@@ -273,16 +272,18 @@ def main():
     """
     Main function to run the Streamlit application.
     """
-    st.title('Stock and Economic Data App')
+    st.set_page_config(layout="wide") # Wide mode
 
-    # Stock input with default value
+    # Sidebar
+    st.sidebar.title('Stock and Economic Data App')
     default_stock = "AAPL"  # Set Apple as the default
-    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
+    stock_symbol = st.sidebar.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
 
-    # Date range selection using buttons
+    # Date range selection using buttons in sidebar
+    st.sidebar.subheader("Select Date Range")
     today = datetime.today()
     years = [1, 5, 10, 20, 25]
-    cols = st.columns(len(years))  # create as many columns as there are years
+    cols = st.sidebar.columns(len(years))  # create as many columns as there are years
     selected_time_frame = 5  # Default to 5 years
     for i, year in enumerate(years):
         with cols[i]:  # iterate through the columns
@@ -291,21 +292,20 @@ def main():
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
+    # Main page
+    st.header(f"Stock Data for {stock_symbol}")
     # Fetch and plot stock data
     stock_df = get_stock_data(stock_symbol, start_date, end_date)
-    with st.container():
-        st.header(f"Stock Data for {stock_symbol}")
-        if stock_df is not None:
-            stock_fig = plot_stock_data(stock_df, stock_symbol)
-            if stock_fig is not None:
-                st.plotly_chart(stock_fig, use_container_width=True)
-            else:
-                st.warning("No stock plot to display.")  # show a warning message
+    if stock_df is not None:
+        stock_fig = plot_stock_data(stock_df, stock_symbol)
+        if stock_fig is not None:
+            st.plotly_chart(stock_fig, use_container_width=True)
         else:
-            st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
+            st.warning("No stock plot to display.")  # show a warning message
+    else:
+        st.info("Please enter a valid stock symbol and date range.")  # Only show if user intends to see the chart
     
-    # Fetch and plot economic data
-    economic_df = get_economic_data(start_date, end_date)
+    # Fetch and plot economic data in expander
     with st.expander("Economic Data: Federal Funds Rate and GDP"):
         st.markdown("""
             ## Federal Funds Rate and GDP
@@ -315,6 +315,7 @@ def main():
             -   **Federal Funds Rate:** The interest rate at which banks lend to each other overnight.  It is a key indicator of monetary policy.
             -   **GDP (Gross Domestic Product):** The total monetary value of all final goods and services produced within a country's borders during a specific time period.  It is a primary indicator of a country's economic health.
             """)
+        economic_df = get_economic_data(start_date, end_date)
         if economic_df is not None:
             economic_fig = plot_economic_data(economic_df)
             if economic_fig is not None:
