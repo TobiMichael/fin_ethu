@@ -1,10 +1,20 @@
 import streamlit as st
 
-# Set the title of the web app
-st.title("Love Messenger ❤️")
+# 1. Title
+st.title("Streamlit Layout Test")
 
-# Add a header
-st.header("A Special Message")
+# 2. Description
+st.write("This is a simple layout test to demonstrate Streamlit columns.")
 
-# Display the message
-st.write("💖 I love you 💖")
+# 3. Divide body into 3 columns
+col1, col2, col3 = st.columns(3)
+
+# Place content in each column
+with col1:
+    st.write("i love you")
+
+with col2:
+    st.write("what???")
+
+with col3:
+    st.write("I love you dearly")
