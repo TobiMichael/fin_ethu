@@ -159,7 +159,7 @@ def get_revenue_data(symbol, start_date, end_date):
                           or None if an error occurs or no revenue data is available.
     """
     try:
-        logging.info(f"Fetching revenue data for {symbol} from {start_date} to {end_date}")
+        logging.info(f"Fetching revenue data for {symbol} from {2000-01-01} to {end_date}")
         stock = yf.Ticker(symbol)
         # Fetch quarterly revenue
         revenue_data = stock.quarterly_income_stmt
