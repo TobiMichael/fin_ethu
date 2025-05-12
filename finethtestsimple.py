@@ -549,7 +549,8 @@ def main():
 
     # Fetch and plot revenue data in expander
     with st.expander("Quarterly Revenue"):
-        revenue_df = get_revenue_data(stock_symbol, start_date, end_date)
+        revenue_start_date = datetime(2000, 1, 1)
+        revenue_df = get_revenue_data(stock_symbol, revenue_start_date, end_date)
         if revenue_df is not None:
             revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
             if revenue_fig is not None:
