@@ -159,7 +159,7 @@ def get_revenue_data(symbol, start_date, end_date):
                           or None if an error occurs or no revenue data is available.
     """
     try:
-        logging.info(f"Fetching revenue data for {symbol} from {2000-01-01} to {end_date}")
+        logging.info(f"Fetching revenue data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
         # Fetch quarterly revenue
         revenue_data = stock.quarterly_income_stmt
@@ -268,7 +268,7 @@ def get_dividend_data(symbol, start_date, end_date):
         logging.info(f"Successfully fetched dividend data for {symbol}")
         return dividends_df
     except Exception as e:
-        error_message = f"Error fetching dividend data for {symbol}: {e}"
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
         st.error(error_message)
         logging.error(error_message, exc_info=True)
         return None
