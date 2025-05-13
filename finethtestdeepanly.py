@@ -41,6 +41,7 @@ def calculate_rsi(data, window=14):
 def get_stock_data(ticker, start_date):
     """Downloads stock data from yfinance and calculates moving averages and RSI."""
     try:
+        # yfinance automatically includes Open, High, Low, Close, Adj Close, Volume
         stock_data = yf.download(ticker, start=start_date)
         if stock_data.empty:
             st.warning(f"No data found for {ticker} from {start_date}")
@@ -61,11 +62,17 @@ def plot_stock_comparison(data1, ticker1, data2, ticker2):
 
     fig = go.Figure()
 
+    # Add traces for both Open and Close prices for ticker 1
+    fig.add_trace(go.Scatter(x=data1.index, y=data1['Open'], mode='lines', name=f'{ticker1} Open Price'))
     fig.add_trace(go.Scatter(x=data1.index, y=data1['Close'], mode='lines', name=f'{ticker1} Close Price'))
+
+    # Add traces for both Open and Close prices for ticker 2
+    fig.add_trace(go.Scatter(x=data2.index, y=data2['Open'], mode='lines', name=f'{ticker2} Open Price'))
     fig.add_trace(go.Scatter(x=data2.index, y=data2['Close'], mode='lines', name=f'{ticker2} Close Price'))
 
+
     fig.update_layout(
-        title=f'Comparison of {ticker1} and {ticker2} Close Prices',
+        title=f'Comparison of {ticker1} and {ticker2} Open and Close Prices',
         xaxis_title='Date',
         yaxis_title='Price',
         hovermode='x unified' # Show tooltip for all traces at the same x-coordinate
@@ -81,6 +88,7 @@ def analyze_stock(ticker, start_date):
     Returns the Plotly figure and stock name.
     """
     try:
+        # yfinance automatically includes Open, High, Low, Close, Adj Close, Volume
         stock_data = yf.download(ticker, start=start_date)
 
         if stock_data.empty:
@@ -138,7 +146,8 @@ def analyze_stock(ticker, start_date):
                  fcf_data = fcf_data[fcf_data.index >= start_date_utc]
 
 
-        latest_data = stock_data[['Close', '50_MA', '200_MA', 'RSI']].tail(1)
+        # Display latest data including Open and Close
+        latest_data = stock_data[['Open', 'Close', '50_MA', '200_MA', 'RSI']].tail(1)
         st.subheader(f"Analysis for {ticker} (Last Trading Day, from {start_date}):")
         st.dataframe(latest_data)
 
@@ -146,14 +155,16 @@ def analyze_stock(ticker, start_date):
         # Financial charts have their own x-axes as their dates might differ.
         fig = make_subplots(rows=5, cols=1,
                             shared_xaxes=False, # Set to False to allow different x-axes for financial data
-                            subplot_titles=(f'{ticker} Price and Moving Averages',
+                            subplot_titles=(f'{ticker} Price (Open and Close) and Moving Averages',
                                             f'{ticker} RSI',
                                             f'{ticker} Revenue',
                                             f'{ticker} Dividends',
                                             f'{ticker} Free Cash Flow'),
                             vertical_spacing=0.08) # Adjust spacing between subplots
 
-        # Subplot 1: Price and Moving Averages
+        # Subplot 1: Price (Open and Close) and Moving Averages
+        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Open'], mode='lines', name='Open Price'),
+                      row=1, col=1)
         fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Close'], mode='lines', name='Close Price'),
                       row=1, col=1)
         fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['50_MA'], mode='lines', name='50-Day MA'),
@@ -266,7 +277,7 @@ def main():
         data1 = get_stock_data(ticker1, start_date_str)
         data2 = get_stock_data(ticker2, start_date_str)
         if data1 is not None and data2 is not None:
-            st.subheader("Comparison of Closing Prices")
+            st.subheader("Comparison of Open and Closing Prices")
             fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
             if fig_compare:
                  st.plotly_chart(fig_compare, use_container_width=True)
