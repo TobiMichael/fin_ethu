@@ -147,7 +147,7 @@ def analyze_stock(ticker, start_date):
 
 
         # Display latest data including Open and Close
-        latest_data = stock_data[['Open', 'Close', '50_MA', '200_MA', 'RSI']].tail(1)
+        latest_data = stock_data[['Open', 'High', 'Low', 'Close', '50_MA', '200_MA', 'RSI']].tail(1) # Added High, Low
         st.subheader(f"Analysis for {ticker} (Last Trading Day, from {start_date}):")
         st.dataframe(latest_data)
 
@@ -155,18 +155,24 @@ def analyze_stock(ticker, start_date):
         # Financial charts have their own x-axes as their dates might differ.
         fig = make_subplots(rows=5, cols=1,
                             shared_xaxes=False, # Set to False to allow different x-axes for financial data
-                            subplot_titles=(f'{ticker} Price (Open and Close) and Moving Averages',
+                            subplot_titles=(f'{ticker} Price (Candlestick) and Moving Averages', # Updated title
                                             f'{ticker} RSI',
                                             f'{ticker} Revenue',
                                             f'{ticker} Dividends',
                                             f'{ticker} Free Cash Flow'),
                             vertical_spacing=0.08) # Adjust spacing between subplots
 
-        # Subplot 1: Price (Open and Close) and Moving Averages
-        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Open'], mode='lines', name='Open Price'),
+        # Subplot 1: Price (Candlestick) and Moving Averages
+        # Replaced Scatter traces for Open/Close with a single Candlestick trace
+        fig.add_trace(go.Candlestick(x=stock_data.index,
+                                     open=stock_data['Open'],
+                                     high=stock_data['High'],
+                                     low=stock_data['Low'],
+                                     close=stock_data['Close'],
+                                     name='Price'),
                       row=1, col=1)
-        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Close'], mode='lines', name='Close Price'),
-                      row=1, col=1)
+
+        # Keep the Moving Average traces
         fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['50_MA'], mode='lines', name='50-Day MA'),
                       row=1, col=1)
         fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['200_MA'], mode='lines', name='200-Day MA'),
