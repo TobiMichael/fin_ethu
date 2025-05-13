@@ -1,360 +1,686 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import streamlit as st
 from datetime import datetime
-import pytz
+from dateutil.relativedelta import relativedelta
+import requests
+import json
+import logging
+import pytz  # Import pytz
 
-# Set Streamlit theme
-st.set_page_config(layout="wide")
-st.markdown(
+# Configure logging
+logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
+
+#  API Key
+FRED_API_KEY = "5f722c7cb457ce85f5d483c2d32497c5"  # Replace with user provided API Key
+
+def get_stock_data(symbol, start_date, end_date):
     """
-    <style>
-    body {
-        color: #333;
-        background-color: #f0f2f6;
-    }
-    .stPlot {
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-    /* Style for the suggested ticker display */
-    .suggested-ticker {
-        background-color: #e9e9e9;
-        padding: 8px;
-        border-radius: 4px;
-        margin-top: 10px;
-        font-family: monospace;
-        font-size: 1em;
-        border: 1px solid #ccc;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+    Fetches stock data from yfinance and calculates moving averages.
 
-def calculate_rsi(data, window=14):
-    """Calculates the Relative Strength Index (RSI)."""
-    delta = data['Close'].diff()
-    up = delta.clip(lower=0)
-    down = -1 * delta.clip(upper=0)
-    average_up = up.rolling(window).mean()
-    average_down = down.rolling(window).mean()
-    # Avoid division by zero in rs calculation
-    rs = average_up / average_down.replace(0, 1e-9)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
 
-# Function to attempt ticker lookup by potential name/ticker
-def find_ticker_and_name(query):
-    """Attempts to find a ticker and company name from a query string using yfinance."""
-    if not query:
-        return None, None
-
-    # Try treating the query as a direct ticker first
-    ticker_obj = yf.Ticker(query.upper())
-    try:
-        # Fetch info to validate the ticker and get the name
-        # Checking for 'regularMarketPrice' is a good way to see if the ticker is valid
-        info = ticker_obj.info
-        if info and info.get('regularMarketPrice') is not None:
-             # If valid, return the ticker and its long name
-             return query.upper(), info.get('longName', query.upper())
-        else:
-             # If direct ticker didn't work or no price info, it might be a name (though yfinance lookup by name is unreliable)
-             pass # Proceeding here won't magically make name search work well with yfinance
-    except Exception as e:
-        # print(f"Direct ticker lookup failed for {query}: {e}") # Optional: for debugging
-        pass # It's likely not a direct valid ticker, might be a company name, but yfinance can't reliably search by name.
-
-    # --- Limitation Acknowledged ---
-    # yfinance does NOT have a robust function to search for tickers by company name.
-    # A proper name-to-ticker search with suggestions requires a dedicated financial data API
-    # or a pre-compiled, searchable database, which is beyond the scope of this script
-    # using only yfinance.
-    # Therefore, the primary method here is validating if the input IS a ticker.
-
-    # If no valid ticker was found from the direct attempt
-    return None, None
-
-
-def analyze_stock(ticker, start_date):
-    """
-    Analyzes a stock using yfinance, calculates moving averages and RSI,
-    displays data, and generates charts including revenue, dividends, and free cash flow.
+    Returns:
+        pandas.DataFrame: A DataFrame containing the stock data,
+                          or None if an error occurs.
     """
     try:
-        # Check if the ticker is empty before downloading
-        if not ticker:
-             st.warning("Please enter a ticker symbol to analyze.")
-             return None, None
+        logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        df = stock.history(start=start_date, end=end_date, interval="1wk")  # Weekly data
+        if df.empty:
+            error_message = f"No data found for symbol {symbol} within the specified date range."
+            st.error(error_message)
+            logging.error(error_message)
+            return None
 
-        stock_data = yf.download(ticker, start=start_date)
+        # Calculate moving averages
+        df['MA50'] = df['Close'].rolling(window=50).mean()
+        df['MA200'] = df['Close'].rolling(window=200).mean()
 
-        if stock_data.empty:
-            st.error(f"No data found for ticker **{ticker}** from **{start_date}**. Please check the ticker symbol and date range.")
-            return None, None
+        # Calculate RSI
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
 
-        # Calculate indicators
-        stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
-        stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
-        stock_data['RSI'] = calculate_rsi(stock_data)
-
-        # Get company info, financials, and cash flow
-        stock_info = yf.Ticker(ticker)
-        info = stock_info.info # Get the info dictionary once
-        financials = stock_info.financials
-        cashflow = stock_info.cashflow
-        long_name = info.get('longName', ticker) # Get the long name, default to ticker
-
-        # Helper function to process financial/cashflow data
-        def process_financial_data(data_series, start_date):
-             if data_series.empty:
-                  return pd.Series()
-             if data_series.index.tz is None:
-                  data_series.index = pd.to_datetime(data_series.index).tz_localize('UTC')
-             else:
-                  data_series.index = data_series.index.tz_convert('UTC')
-             start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
-             return data_series[data_series.index >= start_date_utc].sort_index()
-
-
-        # Get revenue data
-        revenue_data = pd.Series()
-        if 'Total Revenue' in financials.index:
-             revenue_data = financials.loc['Total Revenue']
-             revenue_data = process_financial_data(revenue_data, start_date)
-
-
-        # Get dividend data
-        dividends = stock_info.dividends
-        dividends = process_financial_data(dividends, start_date)
-
-
-        # Get free cash flow data
-        fcf_data = pd.Series()
-        if 'Free Cash Flow' in cashflow.index:
-            fcf_data = cashflow.loc['Free Cash Flow']
-            fcf_data = process_financial_data(fcf_data, start_date)
-
-
-        latest_data = stock_data[['Close', '50_MA', '200_MA', 'RSI']].tail(1)
-
-        st.write(f"**Latest Data for {long_name} ({ticker})** (as of last trading day within the selected range):")
-        st.write(latest_data)
-
-        fig, axes = plt.subplots(5, 1, figsize=(12, 18))
-
-        # Subplot 1: Price and Moving Averages
-        axes[0].plot(stock_data.index, stock_data['Close'], label='Close Price')
-        axes[0].plot(stock_data.index, stock_data['50_MA'], label='50-Day MA')
-        axes[0].plot(stock_data.index, stock_data['200_MA'], label='200-Day MA')
-        axes[0].set_title(f'{long_name} ({ticker}) Price and Moving Averages from {start_date}')
-        axes[0].set_xlabel('Date')
-        axes[0].set_ylabel('Price ($)')
-        axes[0].legend()
-        axes[0].grid(True)
-
-        # Subplot 2: RSI
-        axes[1].plot(stock_data.index, stock_data['RSI'], label='RSI', color='purple')
-        axes[1].set_title(f'{long_name} ({ticker}) RSI from {start_date}')
-        axes[1].set_xlabel('Date')
-        axes[1].set_ylabel('RSI')
-        axes[1].axhline(70, color='red', linestyle='--', label='Overbought (70)')
-        axes[1].axhline(30, color='green', linestyle='--', label='Oversold (30)')
-        axes[1].legend()
-        axes[1].grid(True)
-
-        # Subplot 3: Revenue (Bar Chart)
-        if not revenue_data.empty:
-            axes[2].bar(revenue_data.index.to_numpy(), revenue_data.values, color='green', width=70)
-            axes[2].set_title(f'{long_name} ({ticker}) Revenue from {start_date}')
-            axes[2].set_xlabel('Date')
-            axes[2].set_ylabel('Revenue ($)')
-            axes[2].grid(axis='y')
-            fig.autofmt_xdate(axes=axes[2]) # Auto format date labels
-        else:
-            axes[2].text(0.5, 0.5, "Revenue Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[2].transAxes)
-
-        # Subplot 4: Dividends (Bar Chart)
-        if not dividends.empty:
-            axes[3].bar(dividends.index.to_numpy(), dividends.values, color='orange', width=70)
-            axes[3].set_title(f'{long_name} ({ticker}) Dividends from {start_date}')
-            axes[3].set_xlabel('Date')
-            axes[3].set_ylabel('Dividend Amount ($)')
-            axes[3].grid(axis='y')
-            fig.autofmt_xdate(axes=axes[3]) # Auto format date labels
-        else:
-            axes[3].text(0.5, 0.5, "Dividend Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[3].transAxes)
-
-        # Subplot 5: Free Cash Flow (Bar Chart)
-        if not fcf_data.empty:
-            axes[4].bar(fcf_data.index.to_numpy(), fcf_data.values, color='blue', width=70)
-            axes[4].set_title(f'{long_name} ({ticker}) Free Cash Flow from {start_date}')
-            axes[4].set_xlabel('Date')
-            axes[4].set_ylabel('Free Cash Flow ($)')
-            axes[4].grid(axis='y')
-            fig.autofmt_xdate(axes=axes[4]) # Auto format date labels
-        else:
-            axes[4].text(0.5, 0.5, "Free Cash Flow Data Not Available", horizontalalignment='center', verticalalignment='center', transform=axes[4].transAxes)
-
-
-        plt.tight_layout(pad=3.0)
-        return fig, long_name
-
+        logging.info(f"Successfully fetched and processed stock data for {symbol}")
+        return df
     except Exception as e:
-        st.error(f"An error occurred while fetching data for **{ticker}**: {e}. Please verify the ticker symbol.")
-        return None, None
+        error_message = f"Error fetching stock data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_stock_data(df, symbol):
+    """
+    Plots the stock price as a candlestick chart and moving averages.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the stock data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_stock_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the candlestick chart
+        fig = go.Figure(data=[go.Candlestick(
+            x=df.index,
+            open=df['Open'],
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            name=f'{symbol} Price'
+        )])
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
+
+        fig.update_layout(
+            title=f'{symbol} Stock Price with Moving Averages (Weekly)',
+            xaxis_title='Date',
+            yaxis_title='Price (USD)',
+            legend_title='Legend',
+            template='plotly_dark',
+            yaxis_type="log",
+            height=500,
+        )
+        logging.info(f"Successfully plotted stock data for {symbol}")
+        return fig
+    except Exception as e:
+        error_message = f"Error plotting stock data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_rsi_data(df, symbol):
+    """
+    Plots the RSI data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the stock data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The RSI plot, or None if the DataFrame is empty or RSI is missing.
+    """
+    if df is None or df.empty or 'RSI' not in df:
+        logging.warning(f"plot_rsi_data called with empty DataFrame or missing RSI for symbol {symbol}")
+        return None
+
+    try:
+        # Create the RSI plot
+        fig_rsi = go.Figure(data=[go.Scatter(
+            x=df.index,
+            y=df['RSI'],
+            name='RSI',
+            line=dict(color='blue')
+        )])
+
+        # Define the layout for the RSI plot
+        fig_rsi.update_layout(
+            title=f'{symbol} Relative Strength Index (RSI)',
+            xaxis_title='Date',
+            yaxis_title='RSI',
+            template='plotly_dark',
+            height=300,
+            yaxis_range=[0, 100]  # Ensure y-axis range is 0-100 for RSI
+        )
+        logging.info(f"Successfully plotted RSI data for {symbol}")
+        return fig_rsi
+    except Exception as e:
+        error_message = f"Error plotting RSI data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+
+def get_revenue_data(symbol, start_date, end_date):
+    """
+    Fetches revenue data from yfinance, filtered by date range.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the revenue data,
+                          or None if an error occurs or no revenue data is available.
+    """
+    try:
+        logging.info(f"Fetching revenue data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        # Fetch quarterly revenue
+        revenue_data = stock.quarterly_income_stmt
+        if revenue_data is None or revenue_data.empty:
+            logging.warning(f"No revenue data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        revenue_df = revenue_data.T
+        revenue_df.index = pd.to_datetime(revenue_df.index)
+        revenue_df = revenue_df.sort_index()  # Sort by date
+
+        # Select the revenue column
+        if 'Total Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Total Revenue']]
+        elif 'Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Revenue']]
+        else:
+            logging.warning(f"No Revenue or Total Revenue column found for symbol {symbol}")
+            return None
+        
+        # Filter by date range
+        revenue_df = revenue_df[(revenue_df.index >= start_date) & (revenue_df.index <= end_date)]
+        revenue_df = revenue_df.dropna()
+
+        logging.info(f"Successfully fetched revenue data for {symbol}")
+        return revenue_df
+    except Exception as e:
+        error_message = f"Error fetching revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_revenue_data(df, symbol):
+    """
+    Plots the revenue data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the revenue data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The revenue plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_revenue_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the revenue plot
+        fig_revenue = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df.iloc[:, 0],  # Use the first column for revenue data
+            name='Revenue',
+            marker_color='purple'
+        )])
+
+        # Define the layout for the revenue plot
+        fig_revenue.update_layout(
+            title=f'{symbol} Quarterly Revenue',
+            xaxis_title='Date',
+            yaxis_title='Revenue',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted revenue data for {symbol}")
+        return fig_revenue
+    except Exception as e:
+        error_message = f"Error plotting revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def get_dividend_data(symbol, start_date, end_date):
+    """
+    Fetches dividend data from yfinance.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the dividend data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching dividend data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        dividends = stock.dividends
+        if dividends.empty:
+            logging.warning(f"No dividend data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame
+        dividends_df = pd.DataFrame(dividends)
+        dividends_df.index = pd.to_datetime(dividends_df.index)
+
+        # Filter by date range, handling timezones
+        start_date_tz = start_date.replace(tzinfo=pytz.utc)  # Ensure start_date is UTC
+        end_date_tz = end_date.replace(tzinfo=pytz.utc)      # Ensure end_date is UTC
+
+        dividends_df = dividends_df[(dividends_df.index >= start_date_tz) & (dividends_df.index <= end_date_tz)]
+        dividends_df = dividends_df.sort_index()
+
+        logging.info(f"Successfully fetched dividend data for {symbol}")
+        return dividends_df
+    except Exception as e:
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_dividend_data(df, symbol):
+    """
+    Plots the dividend data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the dividend data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The dividend plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_dividend_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the dividend plot
+        fig_dividend = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Dividends'],
+            name='Dividends',
+            marker_color='green'
+        )])
+
+        # Define the layout for the dividend plot
+        fig_dividend.update_layout(
+            title=f'{symbol} Dividends',
+            xaxis_title='Date',
+            yaxis_title='Dividends (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted dividend data for {symbol}")
+        return fig_dividend
+    except Exception as e:
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+def get_free_cash_flow_data(symbol, start_date, end_date):
+    """
+    Fetches free cash flow data from yfinance, filtered by date range.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the free cash flow data,
+                          or None if an error occurs or no free cash flow data is available.
+    """
+    try:
+        logging.info(f"Fetching free cash flow data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        # Fetch quarterly cash flow
+        cashflow_data = stock.quarterly_cashflow
+        if cashflow_data is None or cashflow_data.empty:
+            logging.warning(f"No cash flow data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        cashflow_df = cashflow_data.T
+        cashflow_df.index = pd.to_datetime(cashflow_df.index)
+        cashflow_df = cashflow_df.sort_index()  # Sort by date
+
+        # Select the 'Free Cash Flow' row (it's a row in this structure)
+        if 'Free Cash Flow' in cashflow_df.columns:
+            free_cash_flow_df = cashflow_df[['Free Cash Flow']]
+        else:
+            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in cash flow data.")
+            return None
+        
+        # Filter by date range
+        free_cash_flow_df = free_cash_flow_df[(free_cash_flow_df.index >= start_date) & (free_cash_flow_df.index <= end_date)]
+        free_cash_flow_df = free_cash_flow_df.dropna()
+
+
+        logging.info(f"Successfully fetched free cash flow data for {symbol}")
+        return free_cash_flow_df
+    except Exception as e:
+        error_message = f"Error fetching free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_free_cash_flow_data(df, symbol):
+    """
+    Plots the free cash flow data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the free cash flow data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The free cash flow plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the free cash flow plot
+        fig_free_cash_flow = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Free Cash Flow'],  # Use the 'Free Cash Flow' column
+            name='Free Cash Flow',
+            marker_color='teal'
+        )])
+
+        # Define the layout for the free cash flow plot
+        fig_free_cash_flow.update_layout(
+            title=f'{symbol} Quarterly Free Cash Flow',
+            xaxis_title='Date',
+            yaxis_title='Free Cash Flow (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted free cash flow data for {symbol}")
+        return fig_free_cash_flow
+    except Exception as e:
+        error_message = f"Error plotting free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+def get_economic_data(start_date, end_date):
+    """
+    Fetches US Federal Funds Rate and GDP data from the Federal Reserve API (FRED).
+
+    Args:
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the Fed Funds Rate and GDP data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching economic data from {start_date} to {end_date}")
+        # Convert dates to string format required by FRED API
+        start_date_str = start_date.strftime('%Y-%m-%d')
+        end_date_str = end_date.strftime('%Y-%m-%d')
+
+        # FRED API URLs
+        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+
+        # Fetch data
+        try:
+            ffr_response = requests.get(ffr_url)
+            ffr_response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            gdp_response = requests.get(gdp_url)
+            gdp_response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            error_message = f"Error fetching data from FRED API: {e}"
+            st.error(error_message)
+            logging.error(error_message, exc_info=True)
+            return None
+
+        # Parse JSON responses
+        try:
+            ffr_data = json.loads(ffr_response.text)
+            gdp_data = json.loads(gdp_response.text)
+        except json.JSONDecodeError as e:
+            error_message = f"Error decoding JSON response from FRED API: {e}"
+            st.error(error_message)
+            logging.error(error_message, exc_info=True)
+            return None
+
+
+        # Convert data to pandas DataFrames
+        ffr_df = pd.DataFrame(ffr_data['observations'])
+        gdp_df = pd.DataFrame(gdp_data['observations'])
+
+        #check if dataframes are empty
+        if ffr_df.empty:
+            error_message = "Fed Funds Rate data is empty."
+            st.error(error_message)
+            logging.error(error_message)
+            ffr_df = None  # Set to None to indicate an error
+        
+        if gdp_df.empty:
+            error_message = "GDP data is empty."
+            st.error(error_message)
+            logging.error(error_message)
+            gdp_df = None #set to None to indicate an error
+
+        # Convert 'date' to datetime and 'value' to numeric
+        if ffr_df is not None: # only convert if not None
+            ffr_df['date'] = pd.to_datetime(ffr_df['date'])
+            ffr_df['value'] = pd.to_numeric(ffr_df['value'], errors='coerce')  # Handle missing values
+            ffr_df = ffr_df.rename(columns={'value': 'Fed Funds Rate'})
+        
+        if gdp_df is not None: # only convert if not None
+            gdp_df['date'] = pd.to_datetime(gdp_df['date'])
+            gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')  # Handle missing values
+            gdp_df = gdp_df.rename(columns={'value': 'GDP'})
+        
+
+        # Merge the DataFrames on 'date'
+        if ffr_df is not None and gdp_df is not None:
+            economic_df = pd.merge(ffr_df, gdp_df, on='date', how='outer') # Use outer join to keep all dates
+            economic_df = economic_df.set_index('date')
+            logging.info("Successfully fetched and processed economic data.")
+            return economic_df
+        elif ffr_df is not None:
+            logging.info("Successfully fetched Fed Funds Rate data. GDP data was not available.")
+            return ffr_df
+        elif gdp_df is not None:
+            logging.info("Successfully fetched GDP data. Fed Funds Rate data was not available.")
+            return gdp_df
+        else:
+            error_message = "Failed to fetch both Fed Funds Rate and GDP data."
+            st.error(error_message)
+            logging.error(error_message)
+            return None
+
+    except Exception as e:  # Catch any exception
+        error_message = f"Error occurred while fetching economic data: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+
+def plot_economic_data(df):
+    """
+    Plots the US Federal Funds Rate and GDP on the same chart.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the economic data.
+
+    Returns:
+        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning("plot_economic_data called with empty DataFrame")
+        return None
+
+    try:
+        fig = go.Figure()
+        
+        # Determine which data is available and add traces accordingly
+        if 'Fed Funds Rate' in df.columns and 'GDP' in df.columns:
+            # Add Fed Funds Rate trace
+            fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
+            # Add GDP trace
+            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green'), yaxis="y2"))
+
+            # Define layout with two y-axes
+            fig.update_layout(
+                title='US Federal Funds Rate and GDP',
+                xaxis_title='Date',
+                yaxis_title='Fed Funds Rate (%)',
+                yaxis2=dict(
+                    title='US GDP (Billions USD)',
+                    overlaying='y',
+                    side='right'
+                ),
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        elif 'Fed Funds Rate' in df.columns:
+            fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
+            fig.update_layout(
+                title='US Federal Funds Rate',
+                xaxis_title='Date',
+                yaxis_title='Fed Funds Rate (%)',
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        elif 'GDP' in df.columns:
+            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green')))
+            fig.update_layout(
+                title='US GDP',
+                xaxis_title='Date',
+                yaxis_title='US GDP (Billions USD)',
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        else:
+            error_message = "No valid data to plot in economic data"
+            st.error(error_message)
+            logging.error(error_message)
+            return None
+        
+        logging.info("Successfully plotted economic data.")
+        return fig
+    except Exception as e:
+        error_message = f"Error plotting economic data: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
 
 def main():
-    st.title("Finance Enthusiast")
+    """
+    Main function to run the Streamlit application.
+    """
+    st.set_page_config(layout="wide") # Wide mode
 
-    # Initialize session state variables
-    if 'fig' not in st.session_state:
-        st.session_state.fig = None
-    if 'stock_name' not in st.session_state:
-        st.session_state.stock_name = None
-    if 'current_ticker' not in st.session_state:
-        st.session_state.current_ticker = "" # The ticker currently being displayed/analyzed
-    if 'suggested_ticker' not in st.session_state:
-        st.session_state.suggested_ticker = None
-    if 'suggested_name' not in st.session_state:
-        st.session_state.suggested_name = None
+    # Sidebar
+    st.sidebar.title('Enthusiast Space for Finance') # Updated title here
+    default_stock = "AAPL"  # Set Apple as the default
+    stock_symbol = st.sidebar.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
 
+    # Date range selection using buttons in sidebar
+    st.sidebar.subheader("Select Date Range")
+    today = datetime.today()
+    years = [1, 5, 10, 20, 25]
+    cols = st.sidebar.columns(len(years))  # create as many columns as there are years
+    selected_time_frame = 5  # Default to 5 years
+    for i, year in enumerate(years):
+        with cols[i]:  # iterate through the columns
+            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
+                selected_time_frame = year
+    start_date = today - relativedelta(years=selected_time_frame)
+    end_date = today
 
-    with st.sidebar:
-        st.header("Find Ticker")
+    # Main page
+    st.title('Enthusiast Space for Finance') # Main title
+    # Add the description here
+    st.write("Enthusiast Space for Finance helps you look at different companies' stocks and the overall economy. You tell it which company you're interested in and how far back you want to look, it gets the stock data and important economic numbers. Then, it shows all of this to you in easy-to-understand charts.")
 
-        # Input field for potential company name or ticker to lookup
-        query = st.text_input(
-            "Enter company name or ticker:",
-            placeholder="e.g., Apple, Microsoft, TSLA",
-            help="Enter the company name or ticker symbol to find the official ticker.",
-            key="query_input"
-        ).strip() # Remove leading/trailing whitespace
-
-        # Button to trigger the lookup
-        lookup_button = st.button("Find Ticker", key="lookup_button")
-
-        # Display the suggested ticker and name if found
-        if st.session_state.suggested_ticker:
-            st.markdown(f"**Suggested Ticker:** <div class='suggested-ticker'>{st.session_state.suggested_ticker} ({st.session_state.suggested_name})</div>", unsafe_allow_html=True)
-            st.info(f"Proceed to 'Analyze Stock' below using ticker: **{st.session_state.suggested_ticker}**")
-
-        st.markdown("---") # Separator
-
-        st.header("Analyze Stock")
-        # Input for the confirmed ticker to analyze (can be manually entered or pre-filled from suggestion)
-        ticker_to_analyze = st.text_input(
-             "Ticker Symbol:",
-             value=st.session_state.suggested_ticker if st.session_state.suggested_ticker else "", # Pre-fill if suggested
-             placeholder="Enter Ticker (e.g., AAPL)",
-             help="Enter or confirm the ticker symbol for analysis.",
-             key="ticker_to_analyze_input"
-        ).upper() # Convert to upper automatically
-
-
-        start_year = st.number_input(
-            "Enter start year:",
-            min_value=1900,
-            max_value=datetime.now().year,
-            step=1,
-            value=datetime.now().year - 5,
-            key="start_year_input_analyze" # Unique key
-        )
-
-        analyze_button = st.button("Analyze Stock", key="analyze_button_main")
-
-        st.markdown("---") # Separator
-
-        # Add a clear button
-        clear_button = st.button("Clear Results", key="clear_button_main")
-
-
-    # Logic to handle the "Find Ticker" button click
-    # This part runs outside the sidebar with block but is triggered by the sidebar button
-    if lookup_button and query:
-        # Clear previous suggestion and results when a new lookup is attempted
-        st.session_state.suggested_ticker = None
-        st.session_state.suggested_name = None
-        st.session_state.fig = None
-        st.session_state.stock_name = None
-        st.session_state.current_ticker = ""
-
-        st.info(f"Attempting to find ticker for '{query}'...")
-        found_ticker, found_name = find_ticker_and_name(query)
-
-        if found_ticker:
-            st.session_state.suggested_ticker = found_ticker
-            st.session_state.suggested_name = found_name
-            # Rerun the app to update the sidebar with the suggestion
-            st.experimental_rerun()
+    st.header(f"Stock Data for {stock_symbol}")
+    # Fetch and plot stock data
+    stock_df = get_stock_data(stock_symbol, start_date, end_date)
+    if stock_df is not None:
+        stock_fig = plot_stock_data(stock_df, stock_symbol)
+        if stock_fig is not None:
+            st.plotly_chart(stock_fig, use_container_width=True)
         else:
-            st.warning(f"Could not find a valid ticker for '{query}'. Please try a different name or enter the exact ticker symbol.")
-            st.session_state.suggested_ticker = None
-            st.session_state.suggested_name = None
+            st.warning("No stock plot to display.")  # show a warning message
+
+   
+    # RSI Explanation
+    with st.expander("Relative Strength Index (RSI)"):
+        
+        # Plot RSI data
+        if stock_df is not None:
+            rsi_fig = plot_rsi_data(stock_df, stock_symbol)
+            if rsi_fig is not None:
+                st.plotly_chart(rsi_fig, use_container_width=True)
+            else:
+                st.warning("No RSI plot to display.")
+    
+    # Fetch and plot dividend data in expander
+    with st.expander("Dividends"):
+        dividend_df = get_dividend_data(stock_symbol, start_date, end_date)
+        if dividend_df is not None:
+            dividend_fig = plot_dividend_data(dividend_df, stock_symbol)
+            if dividend_fig is not None:
+                st.plotly_chart(dividend_fig, use_container_width=True)
+            else:
+                st.warning("No dividend plot to display.")
+        else:
+            st.info("Dividend data is not available for this stock within the selected date range.")
+
+    # Fetch and plot revenue data in expander
+    with st.expander("Quarterly Revenue"):
+        revenue_start_date = datetime(2000, 1, 1)
+        revenue_df = get_revenue_data(stock_symbol, revenue_start_date, end_date)
+        if revenue_df is not None:
+            revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
+            if revenue_fig is not None:
+                st.plotly_chart(revenue_fig, use_container_width=True)
+            else:
+                st.warning("No revenue plot to display.")
+        else:
+            st.info("Revenue data is not available for this stock within the selected date range.")
+    
+    # Fetch and plot free cash flow data in expander
+    with st.expander("Quarterly Free Cash Flow"):
+        # Using the same start date as revenue for consistency, or can adjust if needed
+        free_cash_flow_start_date = datetime(2000, 1, 1) 
+        free_cash_flow_df = get_free_cash_flow_data(stock_symbol, free_cash_flow_start_date, end_date)
+        if free_cash_flow_df is not None:
+            free_cash_flow_fig = plot_free_cash_flow_data(free_cash_flow_df, stock_symbol)
+            if free_cash_flow_fig is not None:
+                st.plotly_chart(free_cash_flow_fig, use_container_width=True)
+            else:
+                st.warning("No free cash flow plot to display.")
+        else:
+            st.info("Free cash flow data is not available for this stock within the selected date range.")
 
 
-    # Logic to handle the "Analyze Stock" button click
-    # This part runs outside the sidebar with block
-    if analyze_button and ticker_to_analyze:
-         # Clear previous results when a new analysis is started
-         st.session_state.fig = None
-         st.session_state.stock_name = None
-         st.session_state.current_ticker = "" # Clear before analysis
-
-         try:
-             start_date_str = f"{start_year}-01-01"
-             # Check if the ticker_to_analyze is likely valid before proceeding
-             # We do a quick check here to give faster feedback for obvious errors
-             temp_ticker_check = yf.Ticker(ticker_to_analyze)
-             # Attempt to get info - if this fails, the ticker is likely invalid
-             temp_info = temp_ticker_check.info
-             if temp_info and temp_info.get('regularMarketPrice') is not None:
-                 # Ticker seems valid, proceed with analysis
-                 st.session_state.current_ticker = ticker_to_analyze # Store the ticker being analyzed
-                 st.session_state.fig, st.session_state.stock_name = analyze_stock(ticker_to_analyze, start_date_str)
-                 # Optionally clear the suggestion after analysis
-                 st.session_state.suggested_ticker = None
-                 st.session_state.suggested_name = None
-             else:
-                  st.error(f"Invalid or unsupported ticker symbol: **{ticker_to_analyze}**. Please enter a valid ticker symbol (e.g., AAPL, MSFT).")
-                  st.session_state.fig = None
-                  st.session_state.stock_name = None
-                  st.session_state.current_ticker = "" # Ensure this is empty on error
+    # Fetch and plot economic data in expander
+    with st.expander("Economic Data: Federal Funds Rate and GDP"):
+        economic_df = get_economic_data(start_date, end_date)
+        if economic_df is not None:
+            economic_fig = plot_economic_data(economic_df)
+            if economic_fig is not None:
+                st.plotly_chart(economic_fig, use_container_width=True)
+            else:
+                st.warning("No economic data plot to display.")
+        else:
+            st.info("Unable to fetch economic data.") # Only show if user intends to see the chart
 
 
-         except Exception as e:
-             # Catch any other errors during analysis
-             st.error(f"An error occurred during analysis for ticker **{ticker_to_analyze}**: {e}. Please verify the ticker symbol and date range.")
-             st.session_state.fig = None
-             st.session_state.stock_name = None
-             st.session_state.current_ticker = "" # Ensure this is empty on error
-
-
-    # Handle the clear button - runs outside sidebar
-    if clear_button:
-        st.session_state.fig = None
-        st.session_state.stock_name = None
-        st.session_state.current_ticker = ""
-        st.session_state.suggested_ticker = None
-        st.session_state.suggested_name = None
-        # Clear the input fields as well by setting their state keys
-        st.session_state.query_input = ""
-        st.session_state.ticker_to_analyze_input = ""
-        st.session_state.start_year_input_analyze = datetime.now().year - 5 # Reset start year
-        st.experimental_rerun() # Rerun to clear the display and reset inputs
-
-
-    # Display results if figure exists (either from a new analysis or session state)
-    if st.session_state.fig:
-         # Use the stored stock_name or current_ticker for the header
-         display_name = st.session_state.stock_name if st.session_state.stock_name else st.session_state.current_ticker
-         st.header(f'{display_name} ({st.session_state.current_ticker}) Analysis')
-         st.pyplot(st.session_state.fig, use_container_width=True)
-         # Keep fig and name in state until cleared by the clear button
 
 if __name__ == "__main__":
     main()
+
