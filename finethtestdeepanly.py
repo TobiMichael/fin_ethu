@@ -40,7 +40,8 @@ def get_stock_data(ticker, start_date):
 def plot_stock_comparison(data1, ticker1, data2, ticker2):
     """Plots the candlestick prices of two stocks for comparison using Plotly."""
     if data1 is None or data2 is None:
-        st.warning("Could not plot comparison due to missing data.")
+        # The calling function (main) already checks for None data and displays a warning
+        # No need for another warning here, just return None
         return None
 
     fig = go.Figure()
@@ -73,70 +74,21 @@ def plot_stock_comparison(data1, ticker1, data2, ticker2):
 
 
 # Modified analyze_stock function to return a dictionary of individual figures
-def analyze_stock(ticker, start_date):
+# This function now takes pre-fetched stock_data, financials, cashflow, and info
+def analyze_stock(ticker, start_date, stock_data, financials, cashflow, info):
     """
-    Analyzes a single stock using yfinance, calculates moving averages and RSI,
-    displays data, and generates individual charts for price/MA, RSI, revenue,
-    dividends, and free cash flow using Plotly.
-    Returns a dictionary of Plotly figures and the stock name.
+    Analyzes a single stock using provided data, displays data, and generates
+    individual charts for price/MA, RSI, revenue, dividends, and free cash flow
+    using Plotly. Returns a dictionary of Plotly figures and the stock name.
     """
     try:
-        stock_data = yf.download(ticker, start=start_date)
-
-        if stock_data.empty:
-            st.warning(f"No data found for {ticker} from {start_date}")
+        if stock_data is None or stock_data.empty:
+            # Warning is already shown in get_stock_data
             return {}, None # Return empty dict and None name
-
-        stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
-        stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
-        stock_data['RSI'] = calculate_rsi(stock_data)
-
-        # Get financial data
-        stock_info = yf.Ticker(ticker)
-        financials = stock_info.financials
-        cashflow = stock_info.cashflow
-
-        # Get revenue data
-        revenue_data = pd.Series()
-        if financials is not None and 'Total Revenue' in financials.index:
-            revenue_data = financials.loc['Total Revenue']
-            if not revenue_data.empty:
-                 if revenue_data.index.tz is None:
-                     revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
-                 else:
-                     revenue_data.index = revenue_data.index.tz_convert('UTC')
-                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
-                 revenue_data = revenue_data[revenue_data.index >= start_date_utc]
-
-
-        # Get dividend data
-        dividends = pd.Series()
-        if stock_info.dividends is not None:
-            dividends = stock_info.dividends
-            if not dividends.empty:
-                 if dividends.index.tz is None:
-                     dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
-                 else:
-                     dividends.index = dividends.index.tz_convert('UTC')
-                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
-                 dividends = dividends[dividends.index >= start_date_utc]
-
-
-        # Get free cash flow data
-        fcf_data = pd.Series()
-        if cashflow is not None and 'Free Cash Flow' in cashflow.index:
-            fcf_data = cashflow.loc['Free Cash Flow']
-            if not fcf_data.empty:
-                 if fcf_data.index.tz is None:
-                     fcf_data.index = pd.to_datetime(fcf_data.index).tz_localize('UTC')
-                 else:
-                     fcf_data.index = fcf_data.index.tz_convert('UTC')
-                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
-                 fcf_data = fcf_data[fcf_data.index >= start_date_utc]
 
 
         # Display latest data
-        latest_data = stock_data[['Open', 'High', 'Low', 'Close', '50_MA', '200_MA', 'RSI']].tail(1)
+        latest_data = stock_data[['Open', 'High', 'Low', 'Close', '50_MA', '200_MA', 'RSI']].tail(1) # Added High, Low
         st.subheader(f"Analysis for {ticker} (Last Trading Day, from {start_date}):")
         st.dataframe(latest_data)
 
@@ -161,12 +113,26 @@ def analyze_stock(ticker, start_date):
         # Chart 2: RSI
         fig_rsi = go.Figure()
         fig_rsi.add_trace(go.Scatter(x=stock_data.index, y=stock_data['RSI'], mode='lines', name='RSI', line=dict(color='purple')))
-        fig_rsi.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=70, y1=70, line=dict(color="red", width=2, dash="dash"))
-        fig_rsi.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=30, y1=30, line=dict(color="green", width=2, dash="dash"))
-        fig_rsi.add_annotation(x=stock_data.index.max(), y=70, text="Overbought (70)", showarrow=False, yshift=10)
-        fig_rsi.add_annotation(x=stock_data.index.max(), y=30, text="Oversold (30)", showarrow=False, yshift=-10)
+        # Add horizontal lines for RSI levels - ensure x-range is valid
+        if not stock_data.empty:
+            fig_rsi.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=70, y1=70, line=dict(color="red", width=2, dash="dash"))
+            fig_rsi.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=30, y1=30, line=dict(color="green", width=2, dash="dash"))
+            fig_rsi.add_annotation(x=stock_data.index.max(), y=70, text="Overbought (70)", showarrow=False, yshift=10)
+            fig_rsi.add_annotation(x=stock_data.index.max(), y=30, text="Oversold (30)", showarrow=False, yshift=-10)
         fig_rsi.update_layout(title=f'{ticker} RSI', xaxis_title='Date', yaxis_title='RSI', hovermode='x unified')
         charts['RSI'] = fig_rsi
+
+        # Get revenue data
+        revenue_data = pd.Series()
+        if financials is not None and 'Total Revenue' in financials.index:
+            revenue_data = financials.loc['Total Revenue']
+            if not revenue_data.empty:
+                 if revenue_data.index.tz is None:
+                     revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
+                 else:
+                     revenue_data.index = revenue_data.index.tz_convert('UTC')
+                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+                 revenue_data = revenue_data[revenue_data.index >= start_date_utc]
 
         # Chart 3: Revenue (Bar Chart)
         fig_revenue = go.Figure()
@@ -177,6 +143,19 @@ def analyze_stock(ticker, start_date):
              fig_revenue.add_annotation(text="Revenue Data Not Available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
              fig_revenue.update_layout(title=f'{ticker} Revenue (Data Not Available)')
         charts['Revenue'] = fig_revenue
+
+
+        # Get dividend data
+        dividends = pd.Series()
+        if info is not None and 'dividends' in info and info['dividends'] is not None: # Check info dict first
+             dividends = yf.Ticker(ticker).dividends # Re-fetch dividends specifically if needed, or rely on info if structure allows
+             if not dividends.empty:
+                 if dividends.index.tz is None:
+                     dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
+                 else:
+                     dividends.index = dividends.index.tz_convert('UTC')
+                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+                 dividends = dividends[dividends.index >= start_date_utc]
 
 
         # Chart 4: Dividends (Bar Chart)
@@ -190,6 +169,18 @@ def analyze_stock(ticker, start_date):
         charts['Dividends'] = fig_dividends
 
 
+        # Get free cash flow data
+        fcf_data = pd.Series()
+        if cashflow is not None and 'Free Cash Flow' in cashflow.index:
+            fcf_data = cashflow.loc['Free Cash Flow']
+            if not fcf_data.empty:
+                 if fcf_data.index.tz is None:
+                     fcf_data.index = pd.to_datetime(fcf_data.index).tz_localize('UTC')
+                 else:
+                     fcf_data.index = fcf_data.index.tz_convert('UTC')
+                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+                 fcf_data = fcf_data[fcf_data.index >= start_date_utc]
+
         # Chart 5: Free Cash Flow (Bar Chart)
         fig_fcf = go.Figure()
         if not fcf_data.empty:
@@ -200,8 +191,11 @@ def analyze_stock(ticker, start_date):
              fig_fcf.update_layout(title=f'{ticker} Free Cash Flow (Data Not Available)')
         charts['FCF'] = fig_fcf
 
+        # Get long name from info dictionary
+        stock_name = info.get('longName', ticker) if info else ticker
 
-        return charts, stock_info.info.get('longName', ticker)
+
+        return charts, stock_name
 
     except Exception as e:
         st.error(f"An error occurred during analysis of {ticker}: {e}")
@@ -223,9 +217,25 @@ def main():
     if analyze_button:
         start_date_str = f"{start_year}-01-01"
 
+        # Fetch data for both tickers once
+        data1 = get_stock_data(ticker1, start_date_str)
+        stock_info1 = yf.Ticker(ticker1) # Fetch Ticker object once
+        financials1 = stock_info1.financials if stock_info1 else None
+        cashflow1 = stock_info1.cashflow if stock_info1 else None
+        info1 = stock_info1.info if stock_info1 else None
+
+
+        data2 = get_stock_data(ticker2, start_date_str)
+        stock_info2 = yf.Ticker(ticker2) # Fetch Ticker object once
+        financials2 = stock_info2.financials if stock_info2 else None
+        cashflow2 = stock_info2.cashflow if stock_info2 else None
+        info2 = stock_info2.info if stock_info2 else None
+
+
         with col1:
             st.subheader(f"Analysis for {ticker1}")
-            charts1, name1 = analyze_stock(ticker1, start_date_str)
+            # Pass fetched data to analyze_stock
+            charts1, name1 = analyze_stock(ticker1, start_date_str, data1, financials1, cashflow1, info1)
             if charts1: # Check if charts dictionary is not empty
                 # Place each chart in an expander
                 chart_order = ['Price_MA', 'RSI', 'Revenue', 'Dividends', 'FCF'] # Define order for display
@@ -238,7 +248,7 @@ def main():
                 }
                 for chart_key in chart_order:
                     # Set expanded=True if the chart figure exists (data is available)
-                    expanded_state = chart_key in charts1 and charts1[chart_key] is not None and not charts1[chart_key].data == () # Check if figure has data traces
+                    expanded_state = chart_key in charts1 and charts1[chart_key] is not None and charts1[chart_key].data # Check if figure has data traces
                     with st.expander(f"### {ticker1} - {chart_titles[chart_key]}", expanded=expanded_state):
                         if chart_key in charts1 and charts1[chart_key] is not None:
                              # Check if the figure has data before plotting
@@ -253,7 +263,8 @@ def main():
 
         with col2:
             st.subheader(f"Analysis for {ticker2}")
-            charts2, name2 = analyze_stock(ticker2, start_date_str)
+            # Pass fetched data to analyze_stock
+            charts2, name2 = analyze_stock(ticker2, start_date_str, data2, financials2, cashflow2, info2)
             if charts2: # Check if charts dictionary is not empty
                 # Place each chart in an expander
                 chart_order = ['Price_MA', 'RSI', 'Revenue', 'Dividends', 'FCF'] # Define order for display
@@ -266,7 +277,7 @@ def main():
                 }
                 for chart_key in chart_order:
                     # Set expanded=True if the chart figure exists (data is available)
-                    expanded_state = chart_key in charts2 and charts2[chart_key] is not None and not charts2[chart_key].data == () # Check if figure has data traces
+                    expanded_state = chart_key in charts2 and charts2[chart_key] is not None and charts2[chart_key].data # Check if figure has data traces
                     with st.expander(f"### {ticker2} - {chart_titles[chart_key]}", expanded=expanded_state):
                          if chart_key in charts2 and charts2[chart_key] is not None:
                              # Check if the figure has data before plotting
@@ -280,13 +291,12 @@ def main():
 
 
         # Optional: Display comparison chart below the columns
-        data1 = get_stock_data(ticker1, start_date_str)
-        data2 = get_stock_data(ticker2, start_date_str)
+        # Use the data fetched once at the beginning
         if data1 is not None and data2 is not None:
             # Place the comparison chart in an expander
             # Set expanded=True if the comparison figure exists and has data
             fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
-            expanded_compare_state = fig_compare is not None and not fig_compare.data == ()
+            expanded_compare_state = fig_compare is not None and fig_compare.data # Check if figure has data traces
             with st.expander("### Stock Price Comparison", expanded=expanded_compare_state):
                 st.subheader("Comparison of Candlestick Prices") # Updated title
                 if fig_compare:
