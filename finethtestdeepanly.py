@@ -6,25 +6,7 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 import pytz
 
-st.set_page_config(layout="wide")
-st.markdown(
-    """
-    <style>
-    body {
-        color: #333;
-        background-color: #f0f2f6;
-    }
-    /* Adjusting stPlot styling for Plotly charts */
-    .stPlotlyChart {
-         padding: 10px;
-         border-radius: 5px;
-         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-         margin-bottom: 20px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Removed the custom CSS styling block
 
 def calculate_rsi(data, window=14):
     """Calculates the Relative Strength Index (RSI)."""
@@ -291,4 +273,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
