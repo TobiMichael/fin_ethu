@@ -248,7 +248,7 @@ def main():
                 }
                 for chart_key in chart_order:
                     # Set expanded=True if the chart figure exists (data is available)
-                    expanded_state = chart_key in charts1 and charts1[chart_key] is not None and charts1[chart_key].data # Check if figure has data traces
+                    expanded_state = chart_key in charts1 and charts1[chart_key] is not None and bool(charts1[chart_key].data) # Corrected check
                     with st.expander(f"### {ticker1} - {chart_titles[chart_key]}", expanded=expanded_state):
                         if chart_key in charts1 and charts1[chart_key] is not None:
                              # Check if the figure has data before plotting
@@ -277,7 +277,7 @@ def main():
                 }
                 for chart_key in chart_order:
                     # Set expanded=True if the chart figure exists (data is available)
-                    expanded_state = chart_key in charts2 and charts2[chart_key] is not None and charts2[chart_key].data # Check if figure has data traces
+                    expanded_state = chart_key in charts2 and charts2[chart_key] is not None and bool(charts2[chart_key].data) # Corrected check
                     with st.expander(f"### {ticker2} - {chart_titles[chart_key]}", expanded=expanded_state):
                          if chart_key in charts2 and charts2[chart_key] is not None:
                              # Check if the figure has data before plotting
@@ -296,7 +296,7 @@ def main():
             # Place the comparison chart in an expander
             # Set expanded=True if the comparison figure exists and has data
             fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
-            expanded_compare_state = fig_compare is not None and fig_compare.data # Check if figure has data traces
+            expanded_compare_state = fig_compare is not None and bool(fig_compare.data) # Corrected check
             with st.expander("### Stock Price Comparison", expanded=expanded_compare_state):
                 st.subheader("Comparison of Candlestick Prices") # Updated title
                 if fig_compare:
@@ -306,20 +306,6 @@ def main():
                         st.write("Stock Comparison Chart Not Available")
                 else:
                      st.write("Stock Comparison Chart Not Available")
-
-        # Add a new expander for the comparison chart
-        if data1 is not None and data2 is not None:
-             fig_compare_new = plot_stock_comparison(data1, ticker1, data2, ticker2)
-             expanded_compare_new_state = fig_compare_new is not None and fig_compare_new.data
-             with st.expander("### Another Stock Price Comparison", expanded=expanded_compare_new_state):
-                 st.subheader("Another Comparison of Candlestick Prices")
-                 if fig_compare_new:
-                     if fig_compare_new.data:
-                         st.plotly_chart(fig_compare_new, use_container_width=True)
-                     else:
-                         st.write("Stock Comparison Chart Not Available")
-                 else:
-                      st.write("Stock Comparison Chart Not Available")
 
 
 if __name__ == "__main__":
