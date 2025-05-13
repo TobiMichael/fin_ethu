@@ -3,12 +3,8 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime, date # Import date as well
-import logging # Import logging
-
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+from datetime import datetime
+import pytz
 
 st.set_page_config(layout="wide")
 st.markdown(
@@ -30,7 +26,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Keeping calculate_rsi for potential future use, though not used in the new plot function
 def calculate_rsi(data, window=14):
     """Calculates the Relative Strength Index (RSI)."""
     delta = data['Close'].diff()
@@ -43,95 +38,212 @@ def calculate_rsi(data, window=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Adopted get_stock_data function
-def get_stock_data(symbol, start_date, end_date):
-    """
-    Fetches stock data from yfinance and calculates moving averages.
-
-    Args:
-        symbol (str): The stock symbol (e.g., 'AAPL').
-        start_date (datetime): The start date for the data.
-        end_date (datetime): The end date for the data.
-
-    Returns:
-        pandas.DataFrame: A DataFrame containing the stock data,
-                          or None if an error occurs.
-    """
+def get_stock_data(ticker, start_date):
+    """Downloads stock data from yfinance and calculates moving averages and RSI."""
     try:
-        logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
-        stock = yf.Ticker(symbol)
-        # Fetch weekly data as specified in the provided snippet
-        df = stock.history(start=start_date, end=end_date, interval="1wk")
-        if df.empty:
-            error_message = f"No data found for symbol {symbol} within the specified date range."
-            st.warning(error_message) # Use st.warning for user feedback
-            logging.warning(error_message) # Use logging.warning for logs
+        # yfinance automatically includes Open, High, Low, Close, Adj Close, Volume
+        stock_data = yf.download(ticker, start=start_date)
+        if stock_data.empty:
+            st.warning(f"No data found for {ticker} from {start_date}")
             return None
-
-        # Calculate moving averages as specified in the provided snippet
-        df['MA50'] = df['Close'].rolling(window=50).mean()
-        df['MA200'] = df['Close'].rolling(window=200).mean()
-
-        logging.info(f"Successfully fetched data for {symbol}")
-        return df # Return the DataFrame
-
+        stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
+        stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
+        stock_data['RSI'] = calculate_rsi(stock_data)
+        return stock_data
     except Exception as e:
-        error_message = f"Error fetching data for {symbol}: {e}"
-        st.error(error_message)
-        logging.error(error_message, exc_info=True)
+        st.error(f"Error downloading data for {ticker}: {e}")
         return None
 
-# Adopted plot_stock_data function
-def plot_stock_data(df, symbol):
-    """
-    Plots the stock price as a candlestick chart and moving averages using Plotly.
-
-    Args:
-        df (pandas.DataFrame): The DataFrame containing the stock data.
-        symbol (str): The stock symbol.
-
-    Returns:
-        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
-    """
-    if df is None or df.empty:
-        logging.warning(f"plot_stock_data called with empty DataFrame for symbol {symbol}")
+def plot_stock_comparison(data1, ticker1, data2, ticker2):
+    """Plots the closing prices of two stocks for comparison using Plotly."""
+    if data1 is None or data2 is None:
+        st.warning("Could not plot comparison due to missing data.")
         return None
 
+    fig = go.Figure()
+
+    # Add traces for both Open and Close prices for ticker 1
+    fig.add_trace(go.Scatter(x=data1.index, y=data1['Open'], mode='lines', name=f'{ticker1} Open Price'))
+    fig.add_trace(go.Scatter(x=data1.index, y=data1['Close'], mode='lines', name=f'{ticker1} Close Price'))
+
+    # Add traces for both Open and Close prices for ticker 2
+    fig.add_trace(go.Scatter(x=data2.index, y=data2['Open'], mode='lines', name=f'{ticker2} Open Price'))
+    fig.add_trace(go.Scatter(x=data2.index, y=data2['Close'], mode='lines', name=f'{ticker2} Close Price'))
+
+
+    fig.update_layout(
+        title=f'Comparison of {ticker1} and {ticker2} Open and Close Prices',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        hovermode='x unified' # Show tooltip for all traces at the same x-coordinate
+    )
+
+    return fig
+
+
+def analyze_stock(ticker, start_date):
+    """
+    Analyzes a single stock using yfinance, calculates moving averages and RSI,
+    displays data, and generates charts including revenue, dividends, and free cash flow using Plotly.
+    Returns the Plotly figure and stock name.
+    """
     try:
-        # Create the candlestick chart
-        fig = go.Figure(data=[go.Candlestick(
-            x=df.index,
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
-            name=f'{symbol} Price'
-        )])
-        # Add moving averages
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-week MA', line=dict(color='orange'))) # Changed to week as interval is 1wk
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-week MA', line=dict(color='red'))) # Changed to week as interval is 1wk
+        # yfinance automatically includes Open, High, Low, Close, Adj Close, Volume
+        stock_data = yf.download(ticker, start=start_date)
 
+        if stock_data.empty:
+            st.warning(f"No data found for {ticker} from {start_date}")
+            return None, None
+
+        stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
+        stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
+        stock_data['RSI'] = calculate_rsi(stock_data)
+
+        # Get financial data
+        stock_info = yf.Ticker(ticker)
+        financials = stock_info.financials
+        cashflow = stock_info.cashflow
+
+        # Get revenue data
+        revenue_data = pd.Series()
+        if financials is not None and 'Total Revenue' in financials.index:
+            revenue_data = financials.loc['Total Revenue']
+            if not revenue_data.empty:
+                 # Ensure index is datetime and timezone-aware (UTC)
+                 if revenue_data.index.tz is None:
+                     revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
+                 else:
+                     revenue_data.index = revenue_data.index.tz_convert('UTC')
+                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+                 revenue_data = revenue_data[revenue_data.index >= start_date_utc]
+
+
+        # Get dividend data
+        dividends = pd.Series()
+        if stock_info.dividends is not None:
+            dividends = stock_info.dividends
+            if not dividends.empty:
+                 # Ensure index is datetime and timezone-aware (UTC)
+                 if dividends.index.tz is None:
+                     dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
+                 else:
+                     dividends.index = dividends.index.tz_convert('UTC')
+                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+                 dividends = dividends[dividends.index >= start_date_utc]
+
+
+        # Get free cash flow data
+        fcf_data = pd.Series()
+        if cashflow is not None and 'Free Cash Flow' in cashflow.index:
+            fcf_data = cashflow.loc['Free Cash Flow']
+            if not fcf_data.empty:
+                 # Ensure index is datetime and timezone-aware (UTC)
+                 if fcf_data.index.tz is None:
+                     fcf_data.index = pd.to_datetime(fcf_data.index).tz_localize('UTC')
+                 else:
+                     fcf_data.index = fcf_data.index.tz_convert('UTC')
+                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
+                 fcf_data = fcf_data[fcf_data.index >= start_date_utc]
+
+
+        # Display latest data including Open and Close
+        latest_data = stock_data[['Open', 'Close', '50_MA', '200_MA', 'RSI']].tail(1)
+        st.subheader(f"Analysis for {ticker} (Last Trading Day, from {start_date}):")
+        st.dataframe(latest_data)
+
+        # Create subplots: 5 rows, 1 column. Share x-axis for price and RSI.
+        # Financial charts have their own x-axes as their dates might differ.
+        fig = make_subplots(rows=5, cols=1,
+                            shared_xaxes=False, # Set to False to allow different x-axes for financial data
+                            subplot_titles=(f'{ticker} Price (Open and Close) and Moving Averages',
+                                            f'{ticker} RSI',
+                                            f'{ticker} Revenue',
+                                            f'{ticker} Dividends',
+                                            f'{ticker} Free Cash Flow'),
+                            vertical_spacing=0.08) # Adjust spacing between subplots
+
+        # Subplot 1: Price (Open and Close) and Moving Averages
+        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Open'], mode='lines', name='Open Price'),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Close'], mode='lines', name='Close Price'),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['50_MA'], mode='lines', name='50-Day MA'),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['200_MA'], mode='lines', name='200-Day MA'),
+                      row=1, col=1)
+
+        # Subplot 2: RSI
+        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['RSI'], mode='lines', name='RSI', line=dict(color='purple')),
+                      row=2, col=1)
+        # Add horizontal lines for RSI levels
+        fig.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=70, y1=70,
+                      line=dict(color="red", width=2, dash="dash"), row=2, col=1)
+        fig.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=30, y1=30,
+                      line=dict(color="green", width=2, dash="dash"), row=2, col=1)
+        fig.add_annotation(x=stock_data.index.max(), y=70, text="Overbought (70)", showarrow=False, yshift=10, row=2, col=1)
+        fig.add_annotation(x=stock_data.index.max(), y=30, text="Oversold (30)", showarrow=False, yshift=-10, row=2, col=1)
+
+
+        # Subplot 3: Revenue (Bar Chart)
+        if not revenue_data.empty:
+             fig.add_trace(go.Bar(x=revenue_data.index, y=revenue_data.values, name='Revenue', marker_color='green'),
+                           row=3, col=1)
+        else:
+             # Add text annotation if data is not available
+             fig.add_annotation(text="Revenue Data Not Available",
+                                 xref="x3 domain", yref="y3 domain",
+                                 x=0.5, y=0.5, showarrow=False, row=3, col=1)
+
+
+        # Subplot 4: Dividends (Bar Chart)
+        if not dividends.empty:
+             fig.add_trace(go.Bar(x=dividends.index, y=dividends.values, name='Dividends', marker_color='orange'),
+                           row=4, col=1)
+        else:
+             # Add text annotation if data is not available
+             fig.add_annotation(text="Dividend Data Not Available",
+                                 xref="x4 domain", yref="y4 domain",
+                                 x=0.5, y=0.5, showarrow=False, row=4, col=1)
+
+
+        # Subplot 5: Free Cash Flow (Bar Chart)
+        if not fcf_data.empty:
+             fig.add_trace(go.Bar(x=fcf_data.index, y=fcf_data.values, name='Free Cash Flow', marker_color='blue'),
+                           row=5, col=1)
+        else:
+             # Add text annotation if data is not available
+             fig.add_annotation(text="Free Cash Flow Data Not Available",
+                                 xref="x5 domain", yref="y5 domain",
+                                 x=0.5, y=0.5, showarrow=False, row=5, col=1)
+
+
+        # Update layout for the entire figure
         fig.update_layout(
-            title=f'{symbol} Stock Price with Moving Averages (Weekly)',
-            xaxis_title='Date',
-            yaxis_title='Price (USD)',
-            legend_title='Legend',
-            template='plotly_dark', # Using plotly_dark template
-            yaxis_type="log", # Using log scale for y-axis
-            height=600, # Adjusted height
-            xaxis_rangeslider_visible=False # Hide rangeslider for cleaner look
+            height=1800, # Adjust height as needed
+            title_text=f'Financial Analysis for {ticker}',
+            hovermode='x unified' # Show tooltip for all traces at the same x-coordinate
         )
-        logging.info(f"Successfully plotted stock data for {symbol}")
-        return fig # Return the figure
+
+        # Update y-axis titles for each subplot
+        fig.update_yaxes(title_text='Price', row=1, col=1)
+        fig.update_yaxes(title_text='RSI', row=2, col=1)
+        fig.update_yaxes(title_text='Revenue', row=3, col=1)
+        fig.update_yaxes(title_text='Dividend Amount', row=4, col=1)
+        fig.update_yaxes(title_text='Free Cash Flow', row=5, col=1)
+
+        # Update x-axis titles for each subplot (only needed if not shared)
+        fig.update_xaxes(title_text='Date', row=1, col=1)
+        fig.update_xaxes(title_text='Date', row=2, col=1)
+        fig.update_xaxes(title_text='Date', row=3, col=1)
+        fig.update_xaxes(title_text='Date', row=4, col=1)
+        fig.update_xaxes(title_text='Date', row=5, col=1)
+
+
+        return fig, stock_info.info.get('longName', ticker)
 
     except Exception as e:
-        error_message = f"Error plotting stock data for {symbol}: {e}"
-        st.error(error_message)
-        logging.error(error_message, exc_info=True)
-        return None
-
-# Removed the old plot_stock_comparison function as the new approach focuses on individual stock analysis with candlestick charts.
-# Removed the old analyze_stock function as its logic is now integrated into main using the new functions.
+        st.error(f"An error occurred during analysis of {ticker}: {e}")
+        return None, None
 
 
 def main():
@@ -143,53 +255,32 @@ def main():
         st.header("Stock Analysis")
         ticker1 = st.text_input("Enter first stock ticker:", "AAPL").upper()
         ticker2 = st.text_input("Enter second stock ticker:", "GOOGL").upper()
-
-        # Date inputs for start and end dates
-        start_date = st.date_input("Start date:", datetime.now().date() - pd.DateOffset(years=5).date()) # Default to 5 years ago
-        end_date = st.date_input("End date:", datetime.now().date()) # Default to today's date
-
+        start_year = st.number_input("Enter start year:", min_value=1900, max_value=datetime.now().year, step=1, value=datetime.now().year - 5)
         analyze_button = st.button("Analyze Stocks")
 
     if analyze_button:
-        # Convert date objects to datetime for yfinance compatibility if needed, though yfinance handles date objects
-        # start_date_dt = datetime.combine(start_date, datetime.min.time())
-        # end_date_dt = datetime.combine(end_date, datetime.max.time()) # Use end of day for end date
+        start_date_str = f"{start_year}-01-01"
 
         with col1:
             st.subheader(f"Analysis for {ticker1}")
-            # Use the new get_stock_data function
-            stock_df1 = get_stock_data(ticker1, start_date, end_date)
-            if stock_df1 is not None:
-                # Display latest data including Open, Close, MA50, MA200
-                latest_data1 = stock_df1[['Open', 'Close', 'MA50', 'MA200']].tail(1)
-                st.write("Latest Data:")
-                st.dataframe(latest_data1)
-
-                # Use the new plot_stock_data function
-                stock_fig1 = plot_stock_data(stock_df1, ticker1)
-                if stock_fig1 is not None:
-                    st.plotly_chart(stock_fig1, use_container_width=True)
-                else:
-                    st.warning(f"Could not generate plot for {ticker1}.")
+            fig1, name1 = analyze_stock(ticker1, start_date_str)
+            if fig1:
+                st.plotly_chart(fig1, use_container_width=True)
 
         with col2:
             st.subheader(f"Analysis for {ticker2}")
-            # Use the new get_stock_data function
-            stock_df2 = get_stock_data(ticker2, start_date, end_date)
-            if stock_df2 is not None:
-                 # Display latest data including Open, Close, MA50, MA200
-                latest_data2 = stock_df2[['Open', 'Close', 'MA50', 'MA200']].tail(1)
-                st.write("Latest Data:")
-                st.dataframe(latest_data2)
+            fig2, name2 = analyze_stock(ticker2, start_date_str)
+            if fig2:
+                st.plotly_chart(fig2, use_container_width=True)
 
-                # Use the new plot_stock_data function
-                stock_fig2 = plot_stock_data(stock_df2, ticker2)
-                if stock_fig2 is not None:
-                    st.plotly_chart(stock_fig2, use_container_width=True)
-                else:
-                    st.warning(f"Could not generate plot for {ticker2}.")
-
-        # The comparison plot section has been removed as the new plotting approach is for individual candlestick charts.
+        # Optional: Display comparison chart below the columns
+        data1 = get_stock_data(ticker1, start_date_str)
+        data2 = get_stock_data(ticker2, start_date_str)
+        if data1 is not None and data2 is not None:
+            st.subheader("Comparison of Open and Closing Prices")
+            fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
+            if fig_compare:
+                 st.plotly_chart(fig_compare, use_container_width=True)
 
 
 if __name__ == "__main__":
