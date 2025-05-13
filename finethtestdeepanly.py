@@ -36,25 +36,34 @@ def get_stock_data(ticker, start_date):
         st.error(f"Error downloading data for {ticker}: {e}")
         return None
 
+# Modified plot_stock_comparison function to use candlestick charts
 def plot_stock_comparison(data1, ticker1, data2, ticker2):
-    """Plots the closing prices of two stocks for comparison using Plotly."""
+    """Plots the candlestick prices of two stocks for comparison using Plotly."""
     if data1 is None or data2 is None:
         st.warning("Could not plot comparison due to missing data.")
         return None
 
     fig = go.Figure()
 
-    # Add traces for both Open and Close prices for ticker 1
-    fig.add_trace(go.Scatter(x=data1.index, y=data1['Open'], mode='lines', name=f'{ticker1} Open Price'))
-    fig.add_trace(go.Scatter(x=data1.index, y=data1['Close'], mode='lines', name=f'{ticker1} Close Price'))
+    # Add candlestick trace for ticker 1
+    fig.add_trace(go.Candlestick(x=data1.index,
+                                 open=data1['Open'],
+                                 high=data1['High'],
+                                 low=data1['Low'],
+                                 close=data1['Close'],
+                                 name=f'{ticker1} Price'))
 
-    # Add traces for both Open and Close prices for ticker 2
-    fig.add_trace(go.Scatter(x=data2.index, y=data2['Open'], mode='lines', name=f'{ticker2} Open Price'))
-    fig.add_trace(go.Scatter(x=data2.index, y=data2['Close'], mode='lines', name=f'{ticker2} Close Price'))
+    # Add candlestick trace for ticker 2
+    fig.add_trace(go.Candlestick(x=data2.index,
+                                 open=data2['Open'],
+                                 high=data2['High'],
+                                 low=data2['Low'],
+                                 close=data2['Close'],
+                                 name=f'{ticker2} Price'))
 
 
     fig.update_layout(
-        title=f'Comparison of {ticker1} and {ticker2} Open and Close Prices',
+        title=f'Comparison of {ticker1} and {ticker2} Candlestick Prices', # Updated title
         xaxis_title='Date',
         yaxis_title='Price',
         hovermode='x unified' # Show tooltip for all traces at the same x-coordinate
@@ -265,7 +274,7 @@ def main():
         data1 = get_stock_data(ticker1, start_date_str)
         data2 = get_stock_data(ticker2, start_date_str)
         if data1 is not None and data2 is not None:
-            st.subheader("Comparison of Open and Closing Prices")
+            st.subheader("Comparison of Candlestick Prices") # Updated title
             fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
             if fig_compare:
                  st.plotly_chart(fig_compare, use_container_width=True)
