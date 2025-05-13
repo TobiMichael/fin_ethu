@@ -314,6 +314,94 @@ def plot_dividend_data(df, symbol):
         return None
 
 
+def get_free_cash_flow_data(symbol, start_date, end_date):
+    """
+    Fetches free cash flow data from yfinance, filtered by date range.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the free cash flow data,
+                          or None if an error occurs or no free cash flow data is available.
+    """
+    try:
+        logging.info(f"Fetching free cash flow data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        # Fetch quarterly cash flow
+        cashflow_data = stock.quarterly_cashflow
+        if cashflow_data is None or cashflow_data.empty:
+            logging.warning(f"No cash flow data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        cashflow_df = cashflow_data.T
+        cashflow_df.index = pd.to_datetime(cashflow_df.index)
+        cashflow_df = cashflow_df.sort_index()  # Sort by date
+
+        # Select the 'Free Cash Flow' row (it's a row in this structure)
+        if 'Free Cash Flow' in cashflow_df.columns:
+            free_cash_flow_df = cashflow_df[['Free Cash Flow']]
+        else:
+            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in cash flow data.")
+            return None
+        
+        # Filter by date range
+        free_cash_flow_df = free_cash_flow_df[(free_cash_flow_df.index >= start_date) & (free_cash_flow_df.index <= end_date)]
+        free_cash_flow_df = free_cash_flow_df.dropna()
+
+
+        logging.info(f"Successfully fetched free cash flow data for {symbol}")
+        return free_cash_flow_df
+    except Exception as e:
+        error_message = f"Error fetching free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_free_cash_flow_data(df, symbol):
+    """
+    Plots the free cash flow data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the free cash flow data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The free cash flow plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the free cash flow plot
+        fig_free_cash_flow = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Free Cash Flow'],  # Use the 'Free Cash Flow' column
+            name='Free Cash Flow',
+            marker_color='teal'
+        )])
+
+        # Define the layout for the free cash flow plot
+        fig_free_cash_flow.update_layout(
+            title=f'{symbol} Quarterly Free Cash Flow',
+            xaxis_title='Date',
+            yaxis_title='Free Cash Flow (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted free cash flow data for {symbol}")
+        return fig_free_cash_flow
+    except Exception as e:
+        error_message = f"Error plotting free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
 def get_economic_data(start_date, end_date):
     """
     Fetches US Federal Funds Rate and GDP data from the Federal Reserve API (FRED).
@@ -560,6 +648,21 @@ def main():
         else:
             st.info("Revenue data is not available for this stock within the selected date range.")
     
+    # Fetch and plot free cash flow data in expander
+    with st.expander("Quarterly Free Cash Flow"):
+        # Using the same start date as revenue for consistency, or can adjust if needed
+        free_cash_flow_start_date = datetime(2000, 1, 1) 
+        free_cash_flow_df = get_free_cash_flow_data(stock_symbol, free_cash_flow_start_date, end_date)
+        if free_cash_flow_df is not None:
+            free_cash_flow_fig = plot_free_cash_flow_data(free_cash_flow_df, stock_symbol)
+            if free_cash_flow_fig is not None:
+                st.plotly_chart(free_cash_flow_fig, use_container_width=True)
+            else:
+                st.warning("No free cash flow plot to display.")
+        else:
+            st.info("Free cash flow data is not available for this stock within the selected date range.")
+
+
     # Fetch and plot economic data in expander
     with st.expander("Economic Data: Federal Funds Rate and GDP"):
         economic_df = get_economic_data(start_date, end_date)
