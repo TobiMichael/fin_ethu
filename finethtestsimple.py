@@ -183,6 +183,9 @@ def get_revenue_data(symbol, start_date, end_date):
         revenue_df.columns = ['Revenue']
         revenue_df = revenue_df.dropna()
         
+        # Filter by date range *after* converting to DataFrame
+        revenue_df = revenue_df[(revenue_df.index >= start_date) & (revenue_df.index <= end_date)]
+
         logging.info(f"Successfully fetched revenue data for {symbol}")
         return revenue_df
 
