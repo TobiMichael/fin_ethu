@@ -31,7 +31,7 @@ def get_stock_data(symbol, start_date, end_date):
     try:
         logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
-        df = stock.history(start=start_date, end=end_date, interval="1wk")  # Weekly data
+        df = stock.history(start=start_date, end_date=end_date, interval="1wk")  # Weekly data
         if df.empty:
             error_message = f"No data found for symbol {symbol} within the specified date range."
             st.error(error_message)
@@ -167,8 +167,10 @@ def get_revenue_data(symbol, start_date, end_date):
         if financials is not None and 'Total Revenue' in financials.index:
             revenue_data = financials.loc['Total Revenue']
             if not revenue_data.empty:
+                # Convert the index to datetime *before* timezone localization
+                revenue_data.index = pd.to_datetime(revenue_data.index)
                 if revenue_data.index.tz is None:
-                    revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
+                    revenue_data.index = revenue_data.index.tz_localize('UTC')
                 else:
                     revenue_data.index = revenue_data.index.tz_convert('UTC')
                 start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
@@ -183,9 +185,6 @@ def get_revenue_data(symbol, start_date, end_date):
         revenue_df.columns = ['Revenue']
         revenue_df = revenue_df.dropna()
         
-        # Filter by date range *after* converting to DataFrame
-        revenue_df = revenue_df[(revenue_df.index >= start_date) & (revenue_df.index <= end_date)]
-
         logging.info(f"Successfully fetched revenue data for {symbol}")
         return revenue_df
 
