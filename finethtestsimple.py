@@ -508,6 +508,7 @@ def plot_economic_data(df):
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the economic data.
+        symbol (str): The stock symbol.
 
     Returns:
         plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
@@ -598,8 +599,9 @@ def main():
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
+    # Moved stock symbol input to sidebar
     default_stock = "AAPL"  # Set Apple as the default
-    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper() # Moved stock symbol input to main body
+    stock_symbol = st.sidebar.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
 
 
     st.header(f"Stock Data for {stock_symbol}")
