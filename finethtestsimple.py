@@ -582,12 +582,10 @@ def main():
     """
     st.set_page_config(layout="wide") # Wide mode
 
-    # Sidebar
-    st.sidebar.title('Stock and Economic Data App')
-    default_stock = "AAPL"  # Set Apple as the default
-    stock_symbol = st.sidebar.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
+    # Main page
+    st.title('Stock and Economic Data App') # Moved title here
 
-    # Date range selection using buttons in sidebar
+    # Sidebar
     st.sidebar.subheader("Select Date Range")
     today = datetime.today()
     years = [1, 5, 10, 20, 25]
@@ -600,7 +598,10 @@ def main():
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
-    # Main page
+    default_stock = "AAPL"  # Set Apple as the default
+    stock_symbol = st.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper() # Moved stock symbol input to main body
+
+
     st.header(f"Stock Data for {stock_symbol}")
     # Fetch and plot stock data
     stock_df = get_stock_data(stock_symbol, start_date, end_date)
@@ -679,3 +680,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
