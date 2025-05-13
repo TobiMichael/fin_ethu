@@ -406,12 +406,15 @@ def plot_quarterly_free_cash_flow_data(df, symbol):
         logging.error(error_message, exc_info=True)
         return None
 
-def get_annual_free_cash_flow_data(symbol):
+def get_annual_free_cash_flow_data(symbol, start_date, end_date):
     """
-    Fetches annual free cash flow data from yfinance.
+    Fetches annual free cash flow data from yfinance, filtered by date range.
 
     Args:
         symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for filtering.
+        end_date (datetime): The end date for filtering.
+
 
     Returns:
         pandas.DataFrame: A DataFrame containing the annual free cash flow data,
@@ -438,7 +441,10 @@ def get_annual_free_cash_flow_data(symbol):
             logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in annual cash flow data.")
             return None
 
+        # Filter by date range
+        free_cash_flow_df = free_cash_flow_df[(free_cash_flow_df.index >= start_date) & (free_cash_flow_df.index <= end_date)]
         free_cash_flow_df = free_cash_flow_df.dropna()
+
 
         logging.info(f"Successfully fetched annual free cash flow data for {symbol}")
         return free_cash_flow_df
@@ -748,7 +754,8 @@ def main():
     # Add new expander for Annual Free Cash Flow
     with st.expander("Annual Free Cash Flow"):
         st.markdown("Annual Free Cash Flow represents the cash a company has left over after covering its operating expenses and capital expenditures over a year.")
-        annual_free_cash_flow_df = get_annual_free_cash_flow_data(stock_symbol)
+        # Pass start_date and end_date to the function
+        annual_free_cash_flow_df = get_annual_free_cash_flow_data(stock_symbol, start_date, end_date)
         if annual_free_cash_flow_df is not None:
             annual_free_cash_flow_fig = plot_annual_free_cash_flow_data(annual_free_cash_flow_df, stock_symbol)
             if annual_free_cash_flow_fig is not None:
