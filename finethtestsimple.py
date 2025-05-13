@@ -12,8 +12,13 @@ import pytz  # Import pytz
 # Configure logging
 logging.basicConfig(level=logging.ERROR)  # Change to DEBUG for more detailed logs
 
-#  API Key
-FRED_API_KEY = "5f722c7cb457ce85f5d483c2d32497c5"  # Replace with user provided API Key
+# World Bank API base URL
+WORLD_BANK_API_URL = "http://api.worldbank.org/v2/country/all/indicator/"
+
+# World Bank Series IDs
+GDP_SERIES_ID = "NY.GDP.MKTP.CD" # GDP (current US$)
+INFLATION_SERIES_ID = "FP.CPI.TOTL.ZG" # Inflation, consumer prices (annual %)
+
 
 def get_stock_data(symbol, start_date, end_date):
     """
@@ -314,9 +319,9 @@ def plot_dividend_data(df, symbol):
         return None
 
 
-def get_free_cash_flow_data(symbol, start_date, end_date):
+def get_quarterly_free_cash_flow_data(symbol, start_date, end_date):
     """
-    Fetches free cash flow data from yfinance, filtered by date range.
+    Fetches quarterly free cash flow data from yfinance, filtered by date range.
 
     Args:
         symbol (str): The stock symbol (e.g., 'AAPL').
@@ -328,12 +333,12 @@ def get_free_cash_flow_data(symbol, start_date, end_date):
                           or None if an error occurs or no free cash flow data is available.
     """
     try:
-        logging.info(f"Fetching free cash flow data for {symbol} from {start_date} to {end_date}")
+        logging.info(f"Fetching quarterly free cash flow data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
         # Fetch quarterly cash flow
         cashflow_data = stock.quarterly_cashflow
         if cashflow_data is None or cashflow_data.empty:
-            logging.warning(f"No cash flow data found for symbol {symbol}")
+            logging.warning(f"No quarterly cash flow data found for symbol {symbol}")
             return None
 
         # Convert to DataFrame and transpose
@@ -341,11 +346,11 @@ def get_free_cash_flow_data(symbol, start_date, end_date):
         cashflow_df.index = pd.to_datetime(cashflow_df.index)
         cashflow_df = cashflow_df.sort_index()  # Sort by date
 
-        # Select the 'Free Cash Flow' row (it's a row in this structure)
+        # Select the 'Free Cash Flow' column (it's a column in this structure)
         if 'Free Cash Flow' in cashflow_df.columns:
             free_cash_flow_df = cashflow_df[['Free Cash Flow']]
         else:
-            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in cash flow data.")
+            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in quarterly cash flow data.")
             return None
         
         # Filter by date range
@@ -353,17 +358,17 @@ def get_free_cash_flow_data(symbol, start_date, end_date):
         free_cash_flow_df = free_cash_flow_df.dropna()
 
 
-        logging.info(f"Successfully fetched free cash flow data for {symbol}")
+        logging.info(f"Successfully fetched quarterly free cash flow data for {symbol}")
         return free_cash_flow_df
     except Exception as e:
-        error_message = f"Error fetching free cash flow data for {symbol}: {e}"
+        error_message = f"Error fetching quarterly free cash flow data for {symbol}: {e}"
         st.error(error_message)
         logging.error(error_message, exc_info=True)
         return None
 
-def plot_free_cash_flow_data(df, symbol):
+def plot_quarterly_free_cash_flow_data(df, symbol):
     """
-    Plots the free cash flow data.
+    Plots the quarterly free cash flow data.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the free cash flow data.
@@ -373,7 +378,7 @@ def plot_free_cash_flow_data(df, symbol):
         plotly.graph_objects.Figure: The free cash flow plot, or None if the DataFrame is empty.
     """
     if df is None or df.empty:
-        logging.warning(f"plot_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
+        logging.warning(f"plot_quarterly_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
         return None
 
     try:
@@ -393,10 +398,92 @@ def plot_free_cash_flow_data(df, symbol):
             template='plotly_dark',
             height=300,
         )
-        logging.info(f"Successfully plotted free cash flow data for {symbol}")
+        logging.info(f"Successfully plotted quarterly free cash flow data for {symbol}")
         return fig_free_cash_flow
     except Exception as e:
-        error_message = f"Error plotting free cash flow data for {symbol}: {e}"
+        error_message = f"Error plotting quarterly free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def get_annual_free_cash_flow_data(symbol):
+    """
+    Fetches annual free cash flow data from yfinance.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the annual free cash flow data,
+                          or None if an error occurs or no free cash flow data is available.
+    """
+    try:
+        logging.info(f"Fetching annual free cash flow data for {symbol}")
+        stock = yf.Ticker(symbol)
+        # Fetch annual cash flow
+        cashflow_data = stock.cashflow
+        if cashflow_data is None or cashflow_data.empty:
+            logging.warning(f"No annual cash flow data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        cashflow_df = cashflow_data.T
+        cashflow_df.index = pd.to_datetime(cashflow_df.index)
+        cashflow_df = cashflow_df.sort_index()  # Sort by date
+
+        # Select the 'Free Cash Flow' column
+        if 'Free Cash Flow' in cashflow_df.columns:
+            free_cash_flow_df = cashflow_df[['Free Cash Flow']]
+        else:
+            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in annual cash flow data.")
+            return None
+
+        free_cash_flow_df = free_cash_flow_df.dropna()
+
+        logging.info(f"Successfully fetched annual free cash flow data for {symbol}")
+        return free_cash_flow_df
+    except Exception as e:
+        error_message = f"Error fetching annual free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_annual_free_cash_flow_data(df, symbol):
+    """
+    Plots the annual free cash flow data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the annual free cash flow data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The free cash flow plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_annual_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the free cash flow plot
+        fig_free_cash_flow = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Free Cash Flow'],  # Use the 'Free Cash Flow' column
+            name='Free Cash Flow',
+            marker_color='orange' # Using a different color for annual
+        )])
+
+        # Define the layout for the free cash flow plot
+        fig_free_cash_flow.update_layout(
+            title=f'{symbol} Annual Free Cash Flow',
+            xaxis_title='Date',
+            yaxis_title='Free Cash Flow (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted annual free cash flow data for {symbol}")
+        return fig_free_cash_flow
+    except Exception as e:
+        error_message = f"Error plotting annual free cash flow data for {symbol}: {e}"
         st.error(error_message)
         logging.error(error_message, exc_info=True)
         return None
@@ -404,98 +491,102 @@ def plot_free_cash_flow_data(df, symbol):
 
 def get_economic_data(start_date, end_date):
     """
-    Fetches US Federal Funds Rate and GDP data from the Federal Reserve API (FRED).
+    Fetches US GDP and Inflation data from the World Bank API.
 
     Args:
         start_date (datetime): The start date for the data.
         end_date (datetime): The end date for the data.
 
     Returns:
-        pandas.DataFrame: A DataFrame containing the Fed Funds Rate and GDP data,
-                          or None if an error occurs.
+        pandas.DataFrame: A DataFrame containing the GDP and Inflation data,
+                          or None if an error occurs or no data is available.
     """
     try:
-        logging.info(f"Fetching economic data from {start_date} to {end_date}")
-        # Convert dates to string format required by FRED API
-        start_date_str = start_date.strftime('%Y-%m-%d')
-        end_date_str = end_date.strftime('%Y-%m-%d')
+        logging.info(f"Fetching economic data from World Bank for {start_date.year} to {end_date.year}")
+        
+        # World Bank API uses annual data, so use the year range
+        date_range = f"{start_date.year}:{end_date.year}"
 
-        # FRED API URLs
-        ffr_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
-        gdp_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key={FRED_API_KEY}&file_type=json&observation_start={start_date_str}&observation_end={end_date_str}"
+        # Construct API URLs for GDP and Inflation
+        gdp_url = f"{WORLD_BANK_API_URL}{GDP_SERIES_ID}?date={date_range}&format=json&per_page=1000"
+        inflation_url = f"{WORLD_BANK_API_URL}{INFLATION_SERIES_ID}?date={date_range}&format=json&per_page=1000"
 
         # Fetch data
         try:
-            ffr_response = requests.get(ffr_url)
-            ffr_response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
             gdp_response = requests.get(gdp_url)
-            gdp_response.raise_for_status()
+            gdp_response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            inflation_response = requests.get(inflation_url)
+            inflation_response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            error_message = f"Error fetching data from FRED API: {e}"
+            error_message = f"Error fetching data from World Bank API: {e}"
             st.error(error_message)
             logging.error(error_message, exc_info=True)
             return None
 
         # Parse JSON responses
         try:
-            ffr_data = json.loads(ffr_response.text)
             gdp_data = json.loads(gdp_response.text)
+            inflation_data = json.loads(inflation_response.text)
         except json.JSONDecodeError as e:
-            error_message = f"Error decoding JSON response from FRED API: {e}"
+            error_message = f"Error decoding JSON response from World Bank API: {e}"
             st.error(error_message)
             logging.error(error_message, exc_info=True)
             return None
 
+        # World Bank API returns a list of lists, the second list contains the data
+        gdp_observations = gdp_data[1] if len(gdp_data) > 1 else []
+        inflation_observations = inflation_data[1] if len(inflation_data) > 1 else []
+
+        if not gdp_observations and not inflation_observations:
+             error_message = "No economic data found from World Bank for the specified date range."
+             st.warning(error_message)
+             logging.warning(error_message)
+             return None
 
         # Convert data to pandas DataFrames
-        ffr_df = pd.DataFrame(ffr_data['observations'])
-        gdp_df = pd.DataFrame(gdp_data['observations'])
+        gdp_df = pd.DataFrame(gdp_observations)
+        inflation_df = pd.DataFrame(inflation_observations)
 
-        #check if dataframes are empty
-        if ffr_df.empty:
-            error_message = "Fed Funds Rate data is empty."
-            st.error(error_message)
-            logging.error(error_message)
-            ffr_df = None  # Set to None to indicate an error
-        
-        if gdp_df.empty:
-            error_message = "GDP data is empty."
-            st.error(error_message)
-            logging.error(error_message)
-            gdp_df = None #set to None to indicate an error
+        economic_df = None
 
-        # Convert 'date' to datetime and 'value' to numeric
-        if ffr_df is not None: # only convert if not None
-            ffr_df['date'] = pd.to_datetime(ffr_df['date'])
-            ffr_df['value'] = pd.to_numeric(ffr_df['value'], errors='coerce')  # Handle missing values
-            ffr_df = ffr_df.rename(columns={'value': 'Fed Funds Rate'})
-        
-        if gdp_df is not None: # only convert if not None
+        # Process GDP data if available
+        if not gdp_df.empty:
+            gdp_df = gdp_df[['date', 'value']].copy() # Select relevant columns
             gdp_df['date'] = pd.to_datetime(gdp_df['date'])
-            gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')  # Handle missing values
+            gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')
             gdp_df = gdp_df.rename(columns={'value': 'GDP'})
-        
+            gdp_df = gdp_df.dropna()
+            economic_df = gdp_df.set_index('date')
 
-        # Merge the DataFrames on 'date'
-        if ffr_df is not None and gdp_df is not None:
-            economic_df = pd.merge(ffr_df, gdp_df, on='date', how='outer') # Use outer join to keep all dates
-            economic_df = economic_df.set_index('date')
-            logging.info("Successfully fetched and processed economic data.")
+
+        # Process Inflation data if available
+        if not inflation_df.empty:
+            inflation_df = inflation_df[['date', 'value']].copy() # Select relevant columns
+            inflation_df['date'] = pd.to_datetime(inflation_df['date'])
+            inflation_df['value'] = pd.to_numeric(inflation_df['value'], errors='coerce')
+            inflation_df = inflation_df.rename(columns={'value': 'Inflation'})
+            inflation_df = inflation_df.dropna()
+
+            if economic_df is None:
+                 economic_df = inflation_df.set_index('date')
+            else:
+                # Merge with GDP data
+                economic_df = pd.merge(economic_df, inflation_df.set_index('date'), left_index=True, right_index=True, how='outer')
+
+
+        if economic_df is not None and not economic_df.empty:
+            economic_df = economic_df.sort_index()
+            logging.info("Successfully fetched and processed economic data from World Bank.")
             return economic_df
-        elif ffr_df is not None:
-            logging.info("Successfully fetched Fed Funds Rate data. GDP data was not available.")
-            return ffr_df
-        elif gdp_df is not None:
-            logging.info("Successfully fetched GDP data. Fed Funds Rate data was not available.")
-            return gdp_df
         else:
-            error_message = "Failed to fetch both Fed Funds Rate and GDP data."
+            error_message = "Failed to process economic data from World Bank."
             st.error(error_message)
             logging.error(error_message)
             return None
 
+
     except Exception as e:  # Catch any exception
-        error_message = f"Error occurred while fetching economic data: {e}"
+        error_message = f"Error occurred while fetching economic data from World Bank: {e}"
         st.error(error_message)
         logging.error(error_message, exc_info=True)
         return None
@@ -504,7 +595,7 @@ def get_economic_data(start_date, end_date):
 
 def plot_economic_data(df):
     """
-    Plots the US Federal Funds Rate and GDP on the same chart.
+    Plots the US GDP (Bar) and Inflation (Line) data.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the economic data.
@@ -520,19 +611,19 @@ def plot_economic_data(df):
         fig = go.Figure()
         
         # Determine which data is available and add traces accordingly
-        if 'Fed Funds Rate' in df.columns and 'GDP' in df.columns:
-            # Add Fed Funds Rate trace
-            fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
-            # Add GDP trace
-            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green'), yaxis="y2"))
+        if 'GDP' in df.columns and 'Inflation' in df.columns:
+            # Add GDP trace as a Bar chart
+            fig.add_trace(go.Bar(x=df.index, y=df['GDP'], name='US GDP (Current USD)', marker_color='green'))
+            # Add Inflation trace as a Scatter (Line) chart
+            fig.add_trace(go.Scatter(x=df.index, y=df['Inflation'], name='US Inflation (Annual %)', line=dict(color='blue'), yaxis="y2"))
 
             # Define layout with two y-axes
             fig.update_layout(
-                title='US Federal Funds Rate and GDP',
+                title='US GDP (Annual) and Inflation (Annual)',
                 xaxis_title='Date',
-                yaxis_title='Fed Funds Rate (%)',
+                yaxis_title='US GDP (Current USD)',
                 yaxis2=dict(
-                    title='US GDP (Billions USD)',
+                    title='US Inflation (Annual %)',
                     overlaying='y',
                     side='right'
                 ),
@@ -540,22 +631,24 @@ def plot_economic_data(df):
                 template='plotly_dark',
                 height=500,
             )
-        elif 'Fed Funds Rate' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index, y=df['Fed Funds Rate'], name='Fed Funds Rate', line=dict(color='blue')))
+        elif 'GDP' in df.columns:
+            # Add GDP trace as a Bar chart
+            fig.add_trace(go.Bar(x=df.index, y=df['GDP'], name='US GDP (Current USD)', marker_color='green'))
             fig.update_layout(
-                title='US Federal Funds Rate',
+                title='US GDP (Annual)',
                 xaxis_title='Date',
-                yaxis_title='Fed Funds Rate (%)',
+                yaxis_title='US GDP (Current USD)',
                 legend_title='Legend',
                 template='plotly_dark',
                 height=500,
             )
-        elif 'GDP' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP', line=dict(color='green')))
+        elif 'Inflation' in df.columns:
+            # Add Inflation trace as a Scatter (Line) chart
+            fig.add_trace(go.Scatter(x=df.index, y=df['Inflation'], name='US Inflation (Annual %)', line=dict(color='blue')))
             fig.update_layout(
-                title='US GDP',
+                title='US Inflation (Annual)',
                 xaxis_title='Date',
-                yaxis_title='US GDP (Billions USD)',
+                yaxis_title='US Inflation (Annual %)',
                 legend_title='Legend',
                 template='plotly_dark',
                 height=500,
@@ -583,7 +676,7 @@ def main():
     st.set_page_config(layout="wide") # Wide mode
 
     # Sidebar
-    st.sidebar.title('Stock and Economic Data App')
+    st.sidebar.title('Enthusiast Space for Finance') # Updated title here
     default_stock = "AAPL"  # Set Apple as the default
     stock_symbol = st.sidebar.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
 
@@ -601,6 +694,10 @@ def main():
     end_date = today
 
     # Main page
+    st.title('Enthusiast Space for Finance') # Main title
+    # Add the description here
+    st.write("Enthusiast Space for Finance helps you look at different companies' stocks and the overall economy. You tell it which company you're interested in and how far back you want to look, it gets the stock data and important economic numbers. Then, it shows all of this to you in easy-to-understand charts.")
+
     st.header(f"Stock Data for {stock_symbol}")
     # Fetch and plot stock data
     stock_df = get_stock_data(stock_symbol, start_date, end_date)
@@ -648,23 +745,35 @@ def main():
         else:
             st.info("Revenue data is not available for this stock within the selected date range.")
     
-    # Fetch and plot free cash flow data in expander
-    with st.expander("Quarterly Free Cash Flow"):
-        # Using the same start date as revenue for consistency, or can adjust if needed
-        free_cash_flow_start_date = datetime(2000, 1, 1) 
-        free_cash_flow_df = get_free_cash_flow_data(stock_symbol, free_cash_flow_start_date, end_date)
-        if free_cash_flow_df is not None:
-            free_cash_flow_fig = plot_free_cash_flow_data(free_cash_flow_df, stock_symbol)
-            if free_cash_flow_fig is not None:
-                st.plotly_chart(free_cash_flow_fig, use_container_width=True)
+    # Add new expander for Annual Free Cash Flow
+    with st.expander("Annual Free Cash Flow"):
+        st.markdown("Annual Free Cash Flow represents the cash a company has left over after covering its operating expenses and capital expenditures over a year.")
+        annual_free_cash_flow_df = get_annual_free_cash_flow_data(stock_symbol)
+        if annual_free_cash_flow_df is not None:
+            annual_free_cash_flow_fig = plot_annual_free_cash_flow_data(annual_free_cash_flow_df, stock_symbol)
+            if annual_free_cash_flow_fig is not None:
+                st.plotly_chart(annual_free_cash_flow_fig, use_container_width=True)
             else:
-                st.warning("No free cash flow plot to display.")
+                st.warning("No annual free cash flow plot to display.")
         else:
-            st.info("Free cash flow data is not available for this stock within the selected date range.")
+            st.info("Annual free cash flow data is not available for this stock.")
+
+    # Keep existing expander for Quarterly Free Cash Flow
+    with st.expander("Quarterly Free Cash Flow"):
+        quarterly_free_cash_flow_start_date = datetime(2000, 1, 1)
+        quarterly_free_cash_flow_df = get_quarterly_free_cash_flow_data(stock_symbol, quarterly_free_cash_flow_start_date, end_date)
+        if quarterly_free_cash_flow_df is not None:
+            quarterly_free_cash_flow_fig = plot_quarterly_free_cash_flow_data(quarterly_free_cash_flow_df, stock_symbol)
+            if quarterly_free_cash_flow_fig is not None:
+                st.plotly_chart(quarterly_free_cash_flow_fig, use_container_width=True)
+            else:
+                st.warning("No quarterly free cash flow plot to display.")
+        else:
+            st.info("Quarterly free cash flow data is not available for this stock within the selected date range.")
 
 
     # Fetch and plot economic data in expander
-    with st.expander("Economic Data: Federal Funds Rate and GDP"):
+    with st.expander("Economic Data: GDP and Inflation"): # Updated expander title
         economic_df = get_economic_data(start_date, end_date)
         if economic_df is not None:
             economic_fig = plot_economic_data(economic_df)
@@ -673,9 +782,10 @@ def main():
             else:
                 st.warning("No economic data plot to display.")
         else:
-            st.info("Unable to fetch economic data.") # Only show if user intends to see the chart
+            st.info("Unable to fetch economic data from World Bank.") # Updated info message
 
 
 
 if __name__ == "__main__":
     main()
+
