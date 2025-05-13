@@ -260,24 +260,31 @@ def main():
             st.subheader(f"Analysis for {ticker1}")
             fig1, name1 = analyze_stock(ticker1, start_date_str)
             if fig1:
-                st.plotly_chart(fig1, use_container_width=True)
+                # Place the analysis chart in an expander
+                with st.expander(f"### {ticker1} Financial Analysis"):
+                    st.plotly_chart(fig1, use_container_width=True)
+
 
         with col2:
             st.subheader(f"Analysis for {ticker2}")
             fig2, name2 = analyze_stock(ticker2, start_date_str)
             if fig2:
-                st.plotly_chart(fig2, use_container_width=True)
+                 # Place the analysis chart in an expander
+                with st.expander(f"### {ticker2} Financial Analysis"):
+                    st.plotly_chart(fig2, use_container_width=True)
+
 
         # Optional: Display comparison chart below the columns
         data1 = get_stock_data(ticker1, start_date_str)
         data2 = get_stock_data(ticker2, start_date_str)
         if data1 is not None and data2 is not None:
-            st.subheader("Comparison of Candlestick Prices") # Updated title
-            fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
-            if fig_compare:
-                 st.plotly_chart(fig_compare, use_container_width=True)
+            # Place the comparison chart in an expander
+            with st.expander("### Stock Price Comparison"):
+                st.subheader("Comparison of Candlestick Prices") # Updated title
+                fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
+                if fig_compare:
+                     st.plotly_chart(fig_compare, use_container_width=True)
 
 
 if __name__ == "__main__":
     main()
-
