@@ -31,7 +31,7 @@ def get_stock_data(symbol, start_date, end_date):
     try:
         logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
-        df = stock.history(start=start_date, end_date=end_date, interval="1wk")  # Weekly data
+        df = stock.history(start=start_date, end=end_date, interval="1wk")  # Weekly data
         if df.empty:
             error_message = f"No data found for symbol {symbol} within the specified date range."
             st.error(error_message)
@@ -161,33 +161,32 @@ def get_revenue_data(symbol, start_date, end_date):
     try:
         logging.info(f"Fetching revenue data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
-        financials = stock.quarterly_income_stmt
-
-        revenue_data = pd.Series()
-        if financials is not None and 'Total Revenue' in financials.index:
-            revenue_data = financials.loc['Total Revenue']
-            if not revenue_data.empty:
-                # Convert the index to datetime *before* timezone localization
-                revenue_data.index = pd.to_datetime(revenue_data.index)
-                if revenue_data.index.tz is None:
-                    revenue_data.index = revenue_data.index.tz_localize('UTC')
-                else:
-                    revenue_data.index = revenue_data.index.tz_convert('UTC')
-                start_date_utc = pd.to_datetime(start_date).tz_localize(pytz.utc)
-                revenue_data = revenue_data[revenue_data.index >= start_date_utc]
-        
-        if revenue_data.empty:
+        # Fetch quarterly revenue
+        revenue_data = stock.quarterly_income_stmt
+        if revenue_data is None or revenue_data.empty:
             logging.warning(f"No revenue data found for symbol {symbol}")
             return None
+
+        # Convert to DataFrame and transpose
+        revenue_df = revenue_data.T
+        revenue_df.index = pd.to_datetime(revenue_df.index)
+        revenue_df = revenue_df.sort_index()  # Sort by date
+
+        # Select the revenue column
+        if 'Total Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Total Revenue']]
+        elif 'Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Revenue']]
+        else:
+            logging.warning(f"No Revenue or Total Revenue column found for symbol {symbol}")
+            return None
         
-        # Convert to DataFrame
-        revenue_df = pd.DataFrame(revenue_data)
-        revenue_df.columns = ['Revenue']
+        # Filter by date range
+        revenue_df = revenue_df[(revenue_df.index >= start_date) & (revenue_df.index <= end_date)]
         revenue_df = revenue_df.dropna()
-        
+
         logging.info(f"Successfully fetched revenue data for {symbol}")
         return revenue_df
-
     except Exception as e:
         error_message = f"Error fetching revenue data for {symbol}: {e}"
         st.error(error_message)
@@ -213,7 +212,7 @@ def plot_revenue_data(df, symbol):
         # Create the revenue plot
         fig_revenue = go.Figure(data=[go.Bar(
             x=df.index,
-            y=df['Revenue'],
+            y=df.iloc[:, 0],  # Use the first column for revenue data
             name='Revenue',
             marker_color='purple'
         )])
@@ -551,8 +550,7 @@ def main():
     # Fetch and plot revenue data in expander
     with st.expander("Quarterly Revenue"):
         revenue_start_date = datetime(2000, 1, 1)
-        revenue_end_date = end_date  # Use the same end_date as other data
-        revenue_df = get_revenue_data(stock_symbol, revenue_start_date, revenue_end_date) # Pass revenue_end_date
+        revenue_df = get_revenue_data(stock_symbol, revenue_start_date, end_date)
         if revenue_df is not None:
             revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
             if revenue_fig is not None:
