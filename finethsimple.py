@@ -461,6 +461,7 @@ def get_economic_data(start_date, end_date):
              logging.warning(error_message)
              return None
 
+
         # Convert data to pandas DataFrames
         gdp_df = pd.DataFrame(gdp_observations)
         inflation_df = pd.DataFrame(inflation_observations)
@@ -513,7 +514,7 @@ def get_economic_data(start_date, end_date):
 
 def plot_economic_data(df):
     """
-    Plots the US GDP and Inflation data.
+    Plots the US GDP (Bar) and Inflation (Line) data.
 
     Args:
         df (pandas.DataFrame): The DataFrame containing the economic data.
@@ -530,14 +531,14 @@ def plot_economic_data(df):
         
         # Determine which data is available and add traces accordingly
         if 'GDP' in df.columns and 'Inflation' in df.columns:
-            # Add GDP trace
-            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP (Current USD)', line=dict(color='green')))
-            # Add Inflation trace
+            # Add GDP trace as a Bar chart
+            fig.add_trace(go.Bar(x=df.index, y=df['GDP'], name='US GDP (Current USD)', marker_color='green'))
+            # Add Inflation trace as a Scatter (Line) chart
             fig.add_trace(go.Scatter(x=df.index, y=df['Inflation'], name='US Inflation (Annual %)', line=dict(color='blue'), yaxis="y2"))
 
             # Define layout with two y-axes
             fig.update_layout(
-                title='US GDP and Inflation (Annual)',
+                title='US GDP (Annual) and Inflation (Annual)',
                 xaxis_title='Date',
                 yaxis_title='US GDP (Current USD)',
                 yaxis2=dict(
@@ -550,7 +551,8 @@ def plot_economic_data(df):
                 height=500,
             )
         elif 'GDP' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index, y=df['GDP'], name='US GDP (Current USD)', line=dict(color='green')))
+            # Add GDP trace as a Bar chart
+            fig.add_trace(go.Bar(x=df.index, y=df['GDP'], name='US GDP (Current USD)', marker_color='green'))
             fig.update_layout(
                 title='US GDP (Annual)',
                 xaxis_title='Date',
@@ -560,6 +562,7 @@ def plot_economic_data(df):
                 height=500,
             )
         elif 'Inflation' in df.columns:
+            # Add Inflation trace as a Scatter (Line) chart
             fig.add_trace(go.Scatter(x=df.index, y=df['Inflation'], name='US Inflation (Annual %)', line=dict(color='blue')))
             fig.update_layout(
                 title='US Inflation (Annual)',
