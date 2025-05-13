@@ -2,9 +2,11 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from plotly.subplots import make_subplots # Still needed for potential future use or if we decide to group some
 from datetime import datetime
 import pytz
+
+# Removed the custom CSS styling block
 
 def calculate_rsi(data, window=14):
     """Calculates the Relative Strength Index (RSI)."""
@@ -70,19 +72,20 @@ def plot_stock_comparison(data1, ticker1, data2, ticker2):
     return fig
 
 
+# Modified analyze_stock function to return a dictionary of individual figures
 def analyze_stock(ticker, start_date):
     """
     Analyzes a single stock using yfinance, calculates moving averages and RSI,
-    displays data, and generates charts including revenue, dividends, and free cash flow using Plotly.
-    Returns the Plotly figure and stock name.
+    displays data, and generates individual charts for price/MA, RSI, revenue,
+    dividends, and free cash flow using Plotly.
+    Returns a dictionary of Plotly figures and the stock name.
     """
     try:
-        # yfinance automatically includes Open, High, Low, Close, Adj Close, Volume
         stock_data = yf.download(ticker, start=start_date)
 
         if stock_data.empty:
             st.warning(f"No data found for {ticker} from {start_date}")
-            return None, None
+            return {}, None # Return empty dict and None name
 
         stock_data['50_MA'] = stock_data['Close'].rolling(window=50).mean()
         stock_data['200_MA'] = stock_data['Close'].rolling(window=200).mean()
@@ -98,7 +101,6 @@ def analyze_stock(ticker, start_date):
         if financials is not None and 'Total Revenue' in financials.index:
             revenue_data = financials.loc['Total Revenue']
             if not revenue_data.empty:
-                 # Ensure index is datetime and timezone-aware (UTC)
                  if revenue_data.index.tz is None:
                      revenue_data.index = pd.to_datetime(revenue_data.index).tz_localize('UTC')
                  else:
@@ -112,7 +114,6 @@ def analyze_stock(ticker, start_date):
         if stock_info.dividends is not None:
             dividends = stock_info.dividends
             if not dividends.empty:
-                 # Ensure index is datetime and timezone-aware (UTC)
                  if dividends.index.tz is None:
                      dividends.index = pd.to_datetime(dividends.index).tz_localize('UTC')
                  else:
@@ -126,7 +127,6 @@ def analyze_stock(ticker, start_date):
         if cashflow is not None and 'Free Cash Flow' in cashflow.index:
             fcf_data = cashflow.loc['Free Cash Flow']
             if not fcf_data.empty:
-                 # Ensure index is datetime and timezone-aware (UTC)
                  if fcf_data.index.tz is None:
                      fcf_data.index = pd.to_datetime(fcf_data.index).tz_localize('UTC')
                  else:
@@ -135,110 +135,77 @@ def analyze_stock(ticker, start_date):
                  fcf_data = fcf_data[fcf_data.index >= start_date_utc]
 
 
-        # Display latest data including Open and Close
-        latest_data = stock_data[['Open', 'High', 'Low', 'Close', '50_MA', '200_MA', 'RSI']].tail(1) # Added High, Low
+        # Display latest data
+        latest_data = stock_data[['Open', 'High', 'Low', 'Close', '50_MA', '200_MA', 'RSI']].tail(1)
         st.subheader(f"Analysis for {ticker} (Last Trading Day, from {start_date}):")
         st.dataframe(latest_data)
 
-        # Create subplots: 5 rows, 1 column. Share x-axis for price and RSI.
-        # Financial charts have their own x-axes as their dates might differ.
-        fig = make_subplots(rows=5, cols=1,
-                            shared_xaxes=False, # Set to False to allow different x-axes for financial data
-                            subplot_titles=(f'{ticker} Price (Candlestick) and Moving Averages', # Updated title
-                                            f'{ticker} RSI',
-                                            f'{ticker} Revenue',
-                                            f'{ticker} Dividends',
-                                            f'{ticker} Free Cash Flow'),
-                            vertical_spacing=0.08) # Adjust spacing between subplots
+        # Create individual figures for each chart type
+        charts = {}
 
-        # Subplot 1: Price (Candlestick) and Moving Averages
-        # Replaced Scatter traces for Open/Close with a single Candlestick trace
-        fig.add_trace(go.Candlestick(x=stock_data.index,
-                                     open=stock_data['Open'],
-                                     high=stock_data['High'],
-                                     low=stock_data['Low'],
-                                     close=stock_data['Close'],
-                                     name='Price'),
-                      row=1, col=1)
+        # Chart 1: Price (Candlestick) and Moving Averages
+        fig_price_ma = go.Figure()
+        fig_price_ma.add_trace(go.Candlestick(x=stock_data.index,
+                                              open=stock_data['Open'],
+                                              high=stock_data['High'],
+                                              low=stock_data['Low'],
+                                              close=stock_data['Close'],
+                                              name='Price'))
+        fig_price_ma.add_trace(go.Scatter(x=stock_data.index, y=stock_data['50_MA'], mode='lines', name='50-Day MA'))
+        fig_price_ma.add_trace(go.Scatter(x=stock_data.index, y=stock_data['200_MA'], mode='lines', name='200-Day MA'))
+        fig_price_ma.update_layout(title=f'{ticker} Price (Candlestick) and Moving Averages',
+                                   xaxis_title='Date', yaxis_title='Price', hovermode='x unified',
+                                   xaxis_rangeslider_visible=False) # Hide rangeslider for cleaner look
+        charts['Price_MA'] = fig_price_ma
 
-        # Keep the Moving Average traces
-        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['50_MA'], mode='lines', name='50-Day MA'),
-                      row=1, col=1)
-        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['200_MA'], mode='lines', name='200-Day MA'),
-                      row=1, col=1)
+        # Chart 2: RSI
+        fig_rsi = go.Figure()
+        fig_rsi.add_trace(go.Scatter(x=stock_data.index, y=stock_data['RSI'], mode='lines', name='RSI', line=dict(color='purple')))
+        fig_rsi.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=70, y1=70, line=dict(color="red", width=2, dash="dash"))
+        fig_rsi.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=30, y1=30, line=dict(color="green", width=2, dash="dash"))
+        fig_rsi.add_annotation(x=stock_data.index.max(), y=70, text="Overbought (70)", showarrow=False, yshift=10)
+        fig_rsi.add_annotation(x=stock_data.index.max(), y=30, text="Oversold (30)", showarrow=False, yshift=-10)
+        fig_rsi.update_layout(title=f'{ticker} RSI', xaxis_title='Date', yaxis_title='RSI', hovermode='x unified')
+        charts['RSI'] = fig_rsi
 
-        # Subplot 2: RSI
-        fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['RSI'], mode='lines', name='RSI', line=dict(color='purple')),
-                      row=2, col=1)
-        # Add horizontal lines for RSI levels
-        fig.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=70, y1=70,
-                      line=dict(color="red", width=2, dash="dash"), row=2, col=1)
-        fig.add_shape(type="line", x0=stock_data.index.min(), x1=stock_data.index.max(), y0=30, y1=30,
-                      line=dict(color="green", width=2, dash="dash"), row=2, col=1)
-        fig.add_annotation(x=stock_data.index.max(), y=70, text="Overbought (70)", showarrow=False, yshift=10, row=2, col=1)
-        fig.add_annotation(x=stock_data.index.max(), y=30, text="Oversold (30)", showarrow=False, yshift=-10, row=2, col=1)
-
-
-        # Subplot 3: Revenue (Bar Chart)
+        # Chart 3: Revenue (Bar Chart)
+        fig_revenue = go.Figure()
         if not revenue_data.empty:
-             fig.add_trace(go.Bar(x=revenue_data.index, y=revenue_data.values, name='Revenue', marker_color='green'),
-                           row=3, col=1)
+             fig_revenue.add_trace(go.Bar(x=revenue_data.index, y=revenue_data.values, name='Revenue', marker_color='green'))
+             fig_revenue.update_layout(title=f'{ticker} Revenue', xaxis_title='Date', yaxis_title='Revenue')
         else:
-             # Add text annotation if data is not available
-             fig.add_annotation(text="Revenue Data Not Available",
-                                 xref="x3 domain", yref="y3 domain",
-                                 x=0.5, y=0.5, showarrow=False, row=3, col=1)
+             fig_revenue.add_annotation(text="Revenue Data Not Available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+             fig_revenue.update_layout(title=f'{ticker} Revenue (Data Not Available)')
+        charts['Revenue'] = fig_revenue
 
 
-        # Subplot 4: Dividends (Bar Chart)
+        # Chart 4: Dividends (Bar Chart)
+        fig_dividends = go.Figure()
         if not dividends.empty:
-             fig.add_trace(go.Bar(x=dividends.index, y=dividends.values, name='Dividends', marker_color='orange'),
-                           row=4, col=1)
+             fig_dividends.add_trace(go.Bar(x=dividends.index, y=dividends.values, name='Dividends', marker_color='orange'))
+             fig_dividends.update_layout(title=f'{ticker} Dividends', xaxis_title='Date', yaxis_title='Dividend Amount')
         else:
-             # Add text annotation if data is not available
-             fig.add_annotation(text="Dividend Data Not Available",
-                                 xref="x4 domain", yref="y4 domain",
-                                 x=0.5, y=0.5, showarrow=False, row=4, col=1)
+             fig_dividends.add_annotation(text="Dividend Data Not Available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+             fig_dividends.update_layout(title=f'{ticker} Dividends (Data Not Available)')
+        charts['Dividends'] = fig_dividends
 
 
-        # Subplot 5: Free Cash Flow (Bar Chart)
+        # Chart 5: Free Cash Flow (Bar Chart)
+        fig_fcf = go.Figure()
         if not fcf_data.empty:
-             fig.add_trace(go.Bar(x=fcf_data.index, y=fcf_data.values, name='Free Cash Flow', marker_color='blue'),
-                           row=5, col=1)
+             fig_fcf.add_trace(go.Bar(x=fcf_data.index, y=fcf_data.values, name='Free Cash Flow', marker_color='blue'))
+             fig_fcf.update_layout(title=f'{ticker} Free Cash Flow', xaxis_title='Date', yaxis_title='Free Cash Flow')
         else:
-             # Add text annotation if data is not available
-             fig.add_annotation(text="Free Cash Flow Data Not Available",
-                                 xref="x5 domain", yref="y5 domain",
-                                 x=0.5, y=0.5, showarrow=False, row=5, col=1)
+             fig_fcf.add_annotation(text="Free Cash Flow Data Not Available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+             fig_fcf.update_layout(title=f'{ticker} Free Cash Flow (Data Not Available)')
+        charts['FCF'] = fig_fcf
 
 
-        # Update layout for the entire figure
-        fig.update_layout(
-            height=1800, # Adjust height as needed
-            title_text=f'Financial Analysis for {ticker}',
-            hovermode='x unified' # Show tooltip for all traces at the same x-coordinate
-        )
-
-        # Update y-axis titles for each subplot
-        fig.update_yaxes(title_text='Price', row=1, col=1)
-        fig.update_yaxes(title_text='RSI', row=2, col=1)
-        fig.update_yaxes(title_text='Revenue', row=3, col=1)
-        fig.update_yaxes(title_text='Dividend Amount', row=4, col=1)
-        fig.update_yaxes(title_text='Free Cash Flow', row=5, col=1)
-
-        # Update x-axis titles for each subplot (only needed if not shared)
-        fig.update_xaxes(title_text='Date', row=1, col=1)
-        fig.update_xaxes(title_text='Date', row=2, col=1)
-        fig.update_xaxes(title_text='Date', row=3, col=1)
-        fig.update_xaxes(title_text='Date', row=4, col=1)
-        fig.update_xaxes(title_text='Date', row=5, col=1)
-
-
-        return fig, stock_info.info.get('longName', ticker)
+        return charts, stock_info.info.get('longName', ticker)
 
     except Exception as e:
         st.error(f"An error occurred during analysis of {ticker}: {e}")
-        return None, None
+        return {}, None # Return empty dict and None name
 
 
 def main():
@@ -258,20 +225,46 @@ def main():
 
         with col1:
             st.subheader(f"Analysis for {ticker1}")
-            fig1, name1 = analyze_stock(ticker1, start_date_str)
-            if fig1:
-                # Place the analysis chart in an expander
-                with st.expander(f"### {ticker1} Financial Analysis"):
-                    st.plotly_chart(fig1, use_container_width=True)
+            charts1, name1 = analyze_stock(ticker1, start_date_str)
+            if charts1: # Check if charts dictionary is not empty
+                # Place each chart in an expander
+                chart_order = ['Price_MA', 'RSI', 'Revenue', 'Dividends', 'FCF'] # Define order for display
+                chart_titles = {
+                    'Price_MA': 'Price (Candlestick) and Moving Averages',
+                    'RSI': 'Relative Strength Index (RSI)',
+                    'Revenue': 'Revenue',
+                    'Dividends': 'Dividends',
+                    'FCF': 'Free Cash Flow'
+                }
+                for chart_key in chart_order:
+                    if chart_key in charts1 and charts1[chart_key] is not None:
+                         with st.expander(f"### {ticker1} - {chart_titles[chart_key]}"):
+                            st.plotly_chart(charts1[chart_key], use_container_width=True)
+                    elif chart_key in chart_titles: # Display placeholder if data not available
+                         with st.expander(f"### {ticker1} - {chart_titles[chart_key]}"):
+                             st.write(f"{chart_titles[chart_key]} Data Not Available")
 
 
         with col2:
             st.subheader(f"Analysis for {ticker2}")
-            fig2, name2 = analyze_stock(ticker2, start_date_str)
-            if fig2:
-                 # Place the analysis chart in an expander
-                with st.expander(f"### {ticker2} Financial Analysis"):
-                    st.plotly_chart(fig2, use_container_width=True)
+            charts2, name2 = analyze_stock(ticker2, start_date_str)
+            if charts2: # Check if charts dictionary is not empty
+                # Place each chart in an expander
+                chart_order = ['Price_MA', 'RSI', 'Revenue', 'Dividends', 'FCF'] # Define order for display
+                chart_titles = {
+                    'Price_MA': 'Price (Candlestick) and Moving Averages',
+                    'RSI': 'Relative Strength Index (RSI)',
+                    'Revenue': 'Revenue',
+                    'Dividends': 'Dividends',
+                    'FCF': 'Free Cash Flow'
+                }
+                for chart_key in chart_order:
+                    if chart_key in charts2 and charts2[chart_key] is not None:
+                         with st.expander(f"### {ticker2} - {chart_titles[chart_key]}"):
+                            st.plotly_chart(charts2[chart_key], use_container_width=True)
+                    elif chart_key in chart_titles: # Display placeholder if data not available
+                         with st.expander(f"### {ticker2} - {chart_titles[chart_key]}"):
+                             st.write(f"{chart_titles[chart_key]} Data Not Available")
 
 
         # Optional: Display comparison chart below the columns
