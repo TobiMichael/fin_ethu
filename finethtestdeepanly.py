@@ -237,11 +237,17 @@ def main():
                     'FCF': 'Free Cash Flow'
                 }
                 for chart_key in chart_order:
-                    if chart_key in charts1 and charts1[chart_key] is not None:
-                         with st.expander(f"### {ticker1} - {chart_titles[chart_key]}"):
-                            st.plotly_chart(charts1[chart_key], use_container_width=True)
-                    elif chart_key in chart_titles: # Display placeholder if data not available
-                         with st.expander(f"### {ticker1} - {chart_titles[chart_key]}"):
+                    # Set expanded=True if the chart figure exists (data is available)
+                    expanded_state = chart_key in charts1 and charts1[chart_key] is not None and not charts1[chart_key].data == () # Check if figure has data traces
+                    with st.expander(f"### {ticker1} - {chart_titles[chart_key]}", expanded=expanded_state):
+                        if chart_key in charts1 and charts1[chart_key] is not None:
+                             # Check if the figure has data before plotting
+                             if charts1[chart_key].data:
+                                st.plotly_chart(charts1[chart_key], use_container_width=True)
+                             else:
+                                 # Display placeholder if data was not available when creating the figure
+                                 st.write(f"{chart_titles[chart_key]} Data Not Available")
+                        elif chart_key in chart_titles: # Display placeholder if chart key not in charts dict (shouldn't happen with current logic)
                              st.write(f"{chart_titles[chart_key]} Data Not Available")
 
 
@@ -259,11 +265,17 @@ def main():
                     'FCF': 'Free Cash Flow'
                 }
                 for chart_key in chart_order:
-                    if chart_key in charts2 and charts2[chart_key] is not None:
-                         with st.expander(f"### {ticker2} - {chart_titles[chart_key]}"):
-                            st.plotly_chart(charts2[chart_key], use_container_width=True)
-                    elif chart_key in chart_titles: # Display placeholder if data not available
-                         with st.expander(f"### {ticker2} - {chart_titles[chart_key]}"):
+                    # Set expanded=True if the chart figure exists (data is available)
+                    expanded_state = chart_key in charts2 and charts2[chart_key] is not None and not charts2[chart_key].data == () # Check if figure has data traces
+                    with st.expander(f"### {ticker2} - {chart_titles[chart_key]}", expanded=expanded_state):
+                         if chart_key in charts2 and charts2[chart_key] is not None:
+                             # Check if the figure has data before plotting
+                             if charts2[chart_key].data:
+                                st.plotly_chart(charts2[chart_key], use_container_width=True)
+                             else:
+                                 # Display placeholder if data was not available when creating the figure
+                                 st.write(f"{chart_titles[chart_key]} Data Not Available")
+                         elif chart_key in chart_titles: # Display placeholder if chart key not in charts dict (shouldn't happen with current logic)
                              st.write(f"{chart_titles[chart_key]} Data Not Available")
 
 
@@ -272,11 +284,18 @@ def main():
         data2 = get_stock_data(ticker2, start_date_str)
         if data1 is not None and data2 is not None:
             # Place the comparison chart in an expander
-            with st.expander("### Stock Price Comparison"):
+            # Set expanded=True if the comparison figure exists and has data
+            fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
+            expanded_compare_state = fig_compare is not None and not fig_compare.data == ()
+            with st.expander("### Stock Price Comparison", expanded=expanded_compare_state):
                 st.subheader("Comparison of Candlestick Prices") # Updated title
-                fig_compare = plot_stock_comparison(data1, ticker1, data2, ticker2)
                 if fig_compare:
-                     st.plotly_chart(fig_compare, use_container_width=True)
+                    if fig_compare.data:
+                        st.plotly_chart(fig_compare, use_container_width=True)
+                    else:
+                        st.write("Stock Comparison Chart Not Available")
+                else:
+                     st.write("Stock Comparison Chart Not Available")
 
 
 if __name__ == "__main__":
