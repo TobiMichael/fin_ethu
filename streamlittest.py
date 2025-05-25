@@ -20,9 +20,9 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize the Gemini model
-# CHANGED: Now using 'gemini-1.0-pro-vision-latest'
-# This model is a powerful, multimodal model that can handle both text and image inputs.
-model = genai.GenerativeModel('gemini-1.0-pro-vision-latest')
+# CHANGED: Now using 'gemini-1.5-flash'
+# This model is optimized for speed and efficiency, suitable for high-volume, low-latency tasks.
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- Streamlit App UI ---
 # Set page configuration at the very beginning
@@ -75,7 +75,7 @@ with st.sidebar:
         # Generate response from Gemini
         with st.spinner("Thinking..."): # Show a spinner while waiting for AI response
             try:
-                # The Gemini Vision models can handle chat, but their 'history' expectation
+                # The Gemini models can handle chat, but their 'history' expectation
                 # can sometimes be slightly different for text-only turns.
                 # It's generally safest to explicitly send parts with 'text' key.
                 chat_history_for_gemini = []
