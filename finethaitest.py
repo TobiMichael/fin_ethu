@@ -8,11 +8,6 @@ import requests
 import json
 import logging
 import pytz # Import pytz
-import os # Import os for environment variables
-from dotenv import load_dotenv # Import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.ERROR) # Change to DEBUG for more detailed logs
@@ -24,9 +19,6 @@ WORLD_BANK_API_URL = "http://api.worldbank.org/v2/country/all/indicator/"
 GDP_SERIES_ID = "NY.GDP.MKTP.CD" # GDP (current US$)
 INFLATION_SERIES_ID = "FP.CPI.TOTL.ZG" # Inflation, consumer prices (annual %)
 
-# Gemini API Configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 def get_stock_data(symbol, start_date, end_date):
     """
@@ -681,52 +673,6 @@ def plot_economic_data(df):
         logging.error(error_message, exc_info=True)
         return None
 
-def get_gemini_response(user_prompt, stock_summary=""):
-    """
-    Sends a prompt to the Google Gemini API and returns the response.
-
-    Args:
-        user_prompt (str): The user's query.
-        stock_summary (str): A summary of the fetched stock data, if available.
-
-    Returns:
-        str: The Gemini model's response, or an error message.
-    """
-    if not GEMINI_API_KEY:
-        return "Gemini API key not found. Please set it in your .env file."
-
-    full_prompt = f"Stock Data Summary: {stock_summary}\n\nUser Query: {user_prompt}" if stock_summary else user_prompt
-    
-    chat_history = []
-    chat_history.append({"role": "user", "parts": [{"text": full_prompt}]})
-    
-    payload = {
-        "contents": chat_history,
-    }
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(f"{GEMINI_API_URL}?key={GEMINI_API_KEY}", headers=headers, data=json.dumps(payload))
-        response.raise_for_status() # Raise an exception for HTTP errors
-        result = response.json()
-        
-        if result.get('candidates') and result['candidates'][0].get('content') and result['candidates'][0]['content'].get('parts'):
-            return result['candidates'][0]['content']['parts'][0]['text']
-        else:
-            logging.error(f"Unexpected Gemini API response structure: {result}")
-            return "Error: Could not get a valid response from the Gemini API."
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Gemini API request failed: {e}")
-        return f"Error connecting to Gemini API: {e}"
-    except json.JSONDecodeError as e:
-        logging.error(f"Failed to decode JSON from Gemini API response: {e}")
-        return "Error: Invalid JSON response from Gemini API."
-    except Exception as e:
-        logging.error(f"An unexpected error occurred during Gemini API call: {e}")
-        return f"An unexpected error occurred: {e}"
 
 
 def main():
@@ -734,15 +680,6 @@ def main():
     Main function to run the Streamlit application.
     """
     st.set_page_config(layout="wide") # Wide mode
-
-    # Initialize session state for chat history and stock data summary if not present
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    if 'stock_data_summary' not in st.session_state:
-        st.session_state.stock_data_summary = ""
-    # Initialize selected_time_frame if not present
-    if 'selected_time_frame' not in st.session_state:
-        st.session_state.selected_time_frame = 5 # Default to 5 years
 
     # Sidebar
     st.sidebar.title('Enthusiast Space for Finance') # Updated title here
@@ -754,14 +691,12 @@ def main():
     today = datetime.today()
     years = [1, 5, 10, 20, 25]
     cols = st.sidebar.columns(len(years)) # create as many columns as there are years
-    selected_time_frame = st.session_state.get('selected_time_frame', 5) # Persist selected time frame
+    selected_time_frame = 5 # Default to 5 years
     for i, year in enumerate(years):
         with cols[i]: # iterate through the columns
-            if st.button(f"{year} Year{'s' if year > 1 else ''}", key=f"year_button_{year}"):
-                st.session_state.selected_time_frame = year
-                st.rerun() # Rerun to apply new date range immediately
-    
-    start_date = today - relativedelta(years=st.session_state.selected_time_frame)
+            if st.button(f"{year} Year{'s' if year > 1 else ''}"):
+                selected_time_frame = year
+    start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
 
     # Main page
@@ -776,26 +711,9 @@ def main():
         stock_fig = plot_stock_data(stock_df, stock_symbol)
         if stock_fig is not None:
             st.plotly_chart(stock_fig, use_container_width=True)
-            # Generate a summary of stock data for the chatbot
-            if not stock_df.empty:
-                latest_close = stock_df['Close'].iloc[-1]
-                ma50 = stock_df['MA50'].iloc[-1] if 'MA50' in stock_df.columns else 'N/A'
-                ma200 = stock_df['MA200'].iloc[-1] if 'MA200' in stock_df.columns else 'N/A'
-                rsi = stock_df['RSI'].iloc[-1] if 'RSI' in stock_df.columns else 'N/A'
-                st.session_state.stock_data_summary = (
-                    f"Current stock symbol: {stock_symbol}. "
-                    f"Latest Close Price: ${latest_close:.2f}. "
-                    f"50-day Moving Average: ${ma50:.2f}. "
-                    f"200-day Moving Average: ${ma200:.2f}. "
-                    f"Relative Strength Index (RSI): {rsi:.2f}."
-                )
-            else:
-                st.session_state.stock_data_summary = f"No stock data available for {stock_symbol}."
         else:
             st.warning("No stock plot to display.") # show a warning message
-            st.session_state.stock_data_summary = f"No stock data available for {stock_symbol}."
-    else:
-        st.session_state.stock_data_summary = f"No stock data available for {stock_symbol}."
+
     
     # RSI Explanation
     with st.expander("Relative Strength Index (RSI)"):
@@ -873,31 +791,6 @@ def main():
         else:
             st.info("Unable to fetch economic data from World Bank.") # Updated info message
 
-    # Chatbot Interface in Sidebar
-    st.sidebar.subheader("Chat with Gemini")
-    chat_container = st.sidebar.container()
-
-    for message in st.session_state.chat_history:
-        with chat_container:
-            st.markdown(f"**{message['role'].capitalize()}**: {message['parts'][0]['text']}")
-
-    user_input = st.sidebar.text_input("Ask Gemini about the stock or economy:", key="gemini_input")
-
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "parts": [{"text": user_input}]})
-        
-        # Get response from Gemini, prepending stock data summary if available
-        response = get_gemini_response(user_input, st.session_state.stock_data_summary)
-        st.session_state.chat_history.append({"role": "model", "parts": [{"text": response}]})
-        
-        # Clear the input box after sending
-        st.session_state.gemini_input = ""
-        st.rerun() # Rerun to display new chat messages
-
-    if st.sidebar.button("Clear Chat", key="clear_chat_button"):
-        st.session_state.chat_history = []
-        st.session_state.stock_data_summary = ""
-        st.rerun()
 
 
 if __name__ == "__main__":
