@@ -151,4 +151,84 @@ with chat_display_area:
 
 # Chat input in the sidebar
 with st.sidebar:
-    
+    st.header("Chat with Gemini")
+    # Corrected indentation for user_input and subsequent if block
+    user_input = st.chat_input("Enter your query:", key="chat_input", on_submit=None) # on_submit=None to allow manual submit
+
+    if user_input:
+        # Add user message to chat history
+        st.session_state.chat_history.append({"role": "user", "parts": [{"text": user_input}]})
+        st.chat_message("user").write(user_input)
+
+        with st.spinner("Thinking..."):
+            try:
+                # Send user message to Gemini
+                response = st.session_state.chat.send_message(user_input)
+
+                # Process potential tool calls
+                tool_responses = []
+                for part in response.candidates[0].content.parts:
+                    if part.function_call:
+                        function_call = part.function_call
+                        function_name = function_call.name
+                        args = {key: value for key, value in function_call.args.items()}
+
+                        st.info(f"Gemini wants to call tool: `{function_name}` with arguments: `{args}`")
+
+                        if function_name in tool_functions:
+                            # Execute the tool function
+                            tool_output = tool_functions[function_name](**args)
+                            tool_responses.append(tool_output)
+                            st.session_state.chat_history.append(
+                                genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=function_name,
+                                        response=json.loads(tool_output) # Ensure response is a dict/JSON object
+                                    )
+                                )
+                            )
+                        else:
+                            error_msg = f"Error: Tool '{function_name}' not found."
+                            tool_responses.append(json.dumps({"error": error_msg}))
+                            st.session_state.chat_history.append(
+                                genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=function_name,
+                                        response={"error": error_msg}
+                                    )
+                                )
+                            )
+
+                # If there were tool responses, send them back to Gemini for a final text response
+                if tool_responses:
+                    # Append the tool responses to the chat history, then send to model again
+                    # The `send_message` method automatically handles adding the response to history
+                    # and sending tool outputs back to the model.
+                    final_response = st.session_state.chat.send_message(tool_responses)
+                    model_response_text = final_response.text
+                else:
+                    # If no tool calls, just get the text directly
+                    model_response_text = response.text
+
+                # Add model's final text response to chat history and display
+                st.session_state.chat_history.append({"role": "model", "parts": [{"text": model_response_text}]})
+                st.chat_message("assistant").write(model_response_text)
+
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+                st.session_state.chat_history.append({"role": "model", "parts": [{"text": f"Sorry, I encountered an error: {e}"}]})
+                st.chat_message("assistant").write(f"Sorry, I encountered an error: {e}")
+
+        # Rerun to update the chat display
+        st.experimental_rerun()
+
+st.sidebar.markdown("""
+---
+**How to use:**
+1.  Enter your Gemini API key in `.streamlit/secrets.toml`.
+2.  Ask questions like:
+    * "What is the price of GOOGL?"
+    * "Tell me about Apple."
+    * "Show me the historical data for MSFT for the last 6 months."
+    * "What was Amazon's price in 2023?" (Note: For specific dates, Gemini might need more context or you might need to refine the prompt.)
+""")
