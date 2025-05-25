@@ -20,9 +20,9 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize the Gemini model
-# CHANGED: Now using 'models/gemini-1.0-pro-vision-latest' for multimodal capabilities
-# This model can handle both text and image inputs.
-model = genai.GenerativeModel('models/gemini-1.0-pro-vision-latest')
+# CHANGED: Now using 'models/gemini-1.5-pro-latest'
+# This model is a powerful, multimodal model with a large context window.
+model = genai.GenerativeModel('models/gemini-1.5-pro-latest')
 
 # --- Streamlit App UI ---
 # Set page configuration at the very beginning
@@ -75,12 +75,8 @@ with st.sidebar:
         # Generate response from Gemini
         with st.spinner("Thinking..."): # Show a spinner while waiting for AI response
             try:
-                # The Gemini Vision models can handle chat, but their 'history' expectation
-                # can sometimes be slightly different for text-only turns.
-                # It's generally safest to explicitly send parts with 'text' key.
-                # For this text-only chat, the conversion should still work.
-                
-                # Convert st.session_state.messages into a format suitable for start_chat
+                # The Gemini 1.5 Pro model supports robust chat history handling.
+                # Ensure parts are correctly formatted with 'text' key.
                 chat_history_for_gemini = []
                 for msg in st.session_state.messages:
                     gemini_role = "user" if msg["role"] == "user" else "model"
@@ -113,4 +109,3 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.messages.append({"role": "assistant", "content": "Chat history cleared. How can I help you now?"})
         st.rerun() # Rerun the app to clear the displayed messages
-
