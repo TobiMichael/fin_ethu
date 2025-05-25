@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+import yfinance as yf # Import yfinance library
 
 # --- Configuration ---
 # Load environment variables from a .env file (recommended for API keys)
@@ -28,6 +29,18 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Set page configuration at the very beginning
 st.set_page_config(page_title="Gemini Chatbot with Layout", layout="centered")
 
+# --- Session State Initialization ---
+# Initialize chat history in session state if it doesn't exist
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.messages.append({"role": "assistant", "content": "Hello! How can I help you today?"})
+
+# Initialize stock data in session state
+if "stock_data" not in st.session_state:
+    st.session_state.stock_data = None
+if "current_ticker" not in st.session_state:
+    st.session_state.current_ticker = ""
+
 # --- Main Body ---
 st.title("Streamlit Layout Test with Sidebar")
 st.write("This is a simple layout test to demonstrate Streamlit columns and a sidebar.")
@@ -45,16 +58,47 @@ with col2:
 with col3:
     st.write("I love you dearly")
 
+st.markdown("---") # Separator
+
+# --- Stock Data Fetcher Section ---
+st.header("📈 Stock Data Fetcher")
+st.write("Enter a stock ticker symbol (e.g., AAPL, GOOGL) to fetch its historical data.")
+
+ticker_input = st.text_input("Enter Ticker Symbol", value=st.session_state.current_ticker, key="ticker_symbol_input")
+
+if st.button("Fetch Stock Data", key="fetch_stock_data_button"):
+    if ticker_input:
+        st.session_state.current_ticker = ticker_input.upper()
+        try:
+            # Fetch historical data for the last 30 days
+            ticker = yf.Ticker(st.session_state.current_ticker)
+            hist = ticker.history(period="30d")
+            if not hist.empty:
+                st.session_state.stock_data = hist
+                st.success(f"Successfully fetched data for {st.session_state.current_ticker}!")
+                st.dataframe(hist.tail()) # Display last few rows
+            else:
+                st.session_state.stock_data = None
+                st.warning(f"No historical data found for {st.session_state.current_ticker}. Please check the ticker symbol.")
+        except Exception as e:
+            st.session_state.stock_data = None
+            st.error(f"Error fetching data for {st.session_state.current_ticker}: {e}")
+    else:
+        st.warning("Please enter a ticker symbol.")
+
+# Display fetched stock data if available
+if st.session_state.stock_data is not None:
+    st.subheader(f"Historical Data for {st.session_state.current_ticker}")
+    st.dataframe(st.session_state.stock_data)
+
+st.markdown("---") # Separator
+
 # --- Chatbot in Sidebar ---
 # Streamlit only supports one sidebar, which is on the left
 with st.sidebar:
     st.title("🤖 Gemini-Powered Chatbot")
     st.markdown("Ask me anything! I'm powered by Google's Gemini AI. This simple bot remembers your current conversation.")
-
-    # Initialize chat history in session state if it doesn't exist
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-        st.session_state.messages.append({"role": "assistant", "content": "Hello! How can I help you today?"})
+    st.markdown("If you've fetched stock data, I can answer questions about it!")
 
     # Display previous messages from chat history
     # Use a container to make the chat messages scrollable if they get too long
@@ -72,6 +116,14 @@ with st.sidebar:
         with chat_container.chat_message("user"): # Display in the chat container
             st.markdown(prompt)
 
+        # Prepare context from stock data if available
+        stock_context = ""
+        if st.session_state.stock_data is not None:
+            # Convert the last few rows of stock data to a string for context
+            stock_summary = st.session_state.stock_data.tail(5).to_string()
+            stock_context = f"\n\nHere is recent historical stock data for {st.session_state.current_ticker}:\n{stock_summary}\n\n"
+            st.info(f"Using stock data for {st.session_state.current_ticker} as context.")
+
         # Generate response from Gemini
         with st.spinner("Thinking..."): # Show a spinner while waiting for AI response
             try:
@@ -83,13 +135,16 @@ with st.sidebar:
                     gemini_role = "user" if msg["role"] == "user" else "model"
                     chat_history_for_gemini.append({"role": gemini_role, "parts": [{"text": msg["content"]}]})
 
+                # Prepend stock context to the current user prompt if available
+                current_prompt_with_context = stock_context + prompt
+
                 # Start a chat session with the history
-                # Exclude the current user prompt from initial history passed to start_chat
+                # Exclude the current user prompt (which now includes context) from initial history passed to start_chat
                 # as it will be sent separately by chat.send_message()
                 chat = model.start_chat(history=chat_history_for_gemini[:-1])
 
-                # Send the current user prompt
-                response = chat.send_message(prompt)
+                # Send the current user prompt with context
+                response = chat.send_message(current_prompt_with_context)
 
                 # Access the text from the response
                 gemini_response_text = response.text
@@ -109,4 +164,6 @@ with st.sidebar:
     if st.button("Clear Chat", key="clear_chat_button"):
         st.session_state.messages = []
         st.session_state.messages.append({"role": "assistant", "content": "Chat history cleared. How can I help you now?"})
+        st.session_state.stock_data = None # Also clear stock data
+        st.session_state.current_ticker = "" # Also clear current ticker
         st.rerun() # Rerun the app to clear the displayed messages
