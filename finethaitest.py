@@ -1,241 +1,194 @@
 import streamlit as st
 import google.generativeai as genai
-import yfinance as yf
-import json # For handling tool output
-import pandas as pd # For displaying historical data nicely
-import os # For environment variables
-from dotenv import load_dotenv # Import load_dotenv
+import os
+from dotenv import load_dotenv
+import yfinance as yf # Import the yfinance library
 
 # --- Configuration ---
 # Load environment variables from .env file
 load_dotenv()
 
-# Load Gemini API key from environment variables
-try:
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        raise ValueError("GEMINI_API_KEY environment variable not set.")
-    genai.configure(api_key=gemini_api_key)
-except ValueError as e:
-    st.error(f"Configuration error: {e}. Please ensure GEMINI_API_KEY is set in your .env file.")
-    st.stop()
-except Exception as e:
-    st.error(f"An unexpected error occurred during API key configuration: {e}")
+# Get the Gemini API key from environment variables
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    st.error("Gemini API key not found. Please set the GEMINI_API_KEY environment variable in a .env file.")
     st.stop()
 
+# --- Define Tools (Functions for Gemini to call) ---
+def get_stock_price(ticker_symbol: str) -> dict:
+    """
+    Fetches the current stock price and related basic info for a given ticker symbol from Yahoo Finance.
+    Args:
+        ticker_symbol (str): The stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL").
+    Returns:
+        dict: A dictionary containing the stock price, currency, company name, or an error message.
+    """
+    try:
+        if not isinstance(ticker_symbol, str) or not ticker_symbol.strip():
+            return {"error": "Invalid ticker symbol provided. Please provide a non-empty string."}
+
+        stock = yf.Ticker(ticker_symbol.upper())
+        info = stock.info
+
+        current_price = info.get('currentPrice')
+        currency = info.get('currency')
+        long_name = info.get('longName', ticker_symbol.upper())
+
+        if current_price is not None and currency is not None:
+            return {
+                "ticker": ticker_symbol.upper(),
+                "companyName": long_name,
+                "price": current_price,
+                "currency": currency,
+                "status": "success"
+            }
+        else:
+            return {"error": f"Could not retrieve price or currency for {ticker_symbol.upper()}. Information might be missing or ticker is invalid.", "status": "error"}
+    except Exception as e:
+        if "No data found for ticker" in str(e) or "failed to download" in str(e):
+             return {"error": f"Could not find data for ticker symbol '{ticker_symbol.upper()}'. It might be invalid.", "status": "error"}
+        return {"error": f"An unexpected error occurred while fetching data for {ticker_symbol.upper()}: {e}", "status": "error"}
+
+# Define the tools available to the Gemini model using FunctionDeclaration
+tools = [
+    genai.FunctionDeclaration(
+        name="get_stock_price",
+        description="Fetches the current stock price and basic company information for a given ticker symbol from Yahoo Finance.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker_symbol": {
+                    "type": "string",
+                    "description": "The stock ticker symbol (e.g., 'AAPL' for Apple, 'MSFT' for Microsoft)."
+                }
+            },
+            "required": ["ticker_symbol"]
+        }
+    )
+]
+
+# Configure the google.generativeai library with your API key and tools
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize the Gemini model with tools
-# We'll define the tools that Gemini can use to interact with yfinance
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    # Corrected: Directly provide the list of FunctionDeclaration objects
-    tools=[
-        genai.FunctionDeclaration(
-            name="get_stock_price",
-            description="Get the current stock price for a given ticker symbol.",
-            parameters=genai.FunctionParameters(
-                type=genai.Type.OBJECT,
-                properties={
-                    "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL').")
-                },
-                required=["ticker_symbol"],
-            ),
-        ),
-        genai.FunctionDeclaration(
-            name="get_company_info",
-            description="Get general information about a company for a given ticker symbol.",
-            parameters=genai.FunctionParameters(
-                type=genai.Type.OBJECT,
-                properties={
-                    "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL').")
-                },
-                required=["ticker_symbol"],
-            ),
-        ),
-        genai.FunctionDeclaration(
-            name="get_historical_data",
-            description="Get historical stock data (Open, High, Low, Close, Volume) for a given ticker symbol and period.",
-            parameters=genai.FunctionParameters(
-                type=genai.Type.OBJECT,
-                properties={
-                    "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL')."),
-                    "period": genai.Schema(type=genai.Type.STRING, description="The period for historical data (e.g., '1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max'). Defaults to '1mo' if not specified."),
-                    "interval": genai.Schema(type=genai.Type.STRING, description="The interval for historical data (e.g., '1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo'). Defaults to '1d' for periods > 7d, '1h' for periods <= 7d. Note: '1m' interval only available for last 7 days."),
-                },
-                required=["ticker_symbol"],
-            ),
-        ),
-    ]
+    'gemini-1.5-flash', # Using the gemini-1.5-flash model
+    tools=tools, # Pass your defined tools to the model
+    tool_config=genai.ToolConfig(
+        function_calling=genai.ToolConfig.FunctionCallingConfig(
+            mode=genai.ToolConfig.FunctionCallingConfig.Mode.AUTO # Let Gemini decide when to call functions
+        )
+    )
 )
 
-# Initialize chat history in session state
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-    # Start a new chat session with the model
-    st.session_state.chat = model.start_chat(history=[])
+# --- Streamlit App UI ---
+st.set_page_config(page_title="Gemini Chatbot with YFinance & Layout", layout="centered")
 
-# --- yfinance Tool Functions ---
-def get_stock_price(ticker_symbol: str) -> str:
-    """Fetches the current stock price for a given ticker symbol."""
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        todays_data = ticker.history(period='1d')
-        if not todays_data.empty:
-            current_price = todays_data['Close'].iloc[-1]
-            return json.dumps({"ticker": ticker_symbol, "current_price": f"{current_price:.2f}"})
-        else:
-            return json.dumps({"error": f"Could not retrieve current price for {ticker_symbol}. It might be an invalid ticker or market is closed."})
-    except Exception as e:
-        return json.dumps({"error": f"An error occurred while fetching price for {ticker_symbol}: {str(e)}"})
+# --- Main Body ---
+st.title("Streamlit Layout Test with Sidebar Chatbot")
+st.write("This is a simple layout test to demonstrate Streamlit columns and a chatbot in the sidebar.")
 
-def get_company_info(ticker_symbol: str) -> str:
-    """Fetches general company information for a given ticker symbol."""
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        info = ticker.info
-        # Extract some key information
-        relevant_info = {
-            "shortName": info.get("shortName"),
-            "sector": info.get("sector"),
-            "industry": info.get("industry"),
-            "fullTimeEmployees": info.get("fullTimeEmployees"),
-            "website": info.get("website"),
-            "longBusinessSummary": info.get("longBusinessSummary")
-        }
-        return json.dumps(relevant_info)
-    except Exception as e:
-        return json.dumps({"error": f"An error occurred while fetching info for {ticker_symbol}: {str(e)}"})
+# Divide body into 3 columns
+col1, col2, col3 = st.columns(3)
 
-def get_historical_data(ticker_symbol: str, period: str = '1mo', interval: str = '1d') -> str:
-    """Fetches historical stock data for a given ticker symbol, period, and interval."""
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        hist = ticker.history(period=period, interval=interval)
-        if not hist.empty:
-            # Convert DataFrame to a list of dictionaries for JSON serialization
-            hist_data = hist.reset_index().to_dict(orient='records')
-            # Format Date column for better readability if it's a datetime object
-            for record in hist_data:
-                if 'Date' in record and isinstance(record['Date'], pd.Timestamp):
-                    record['Date'] = record['Date'].strftime('%Y-%m-%d %H:%M:%S') # Or just '%Y-%m-%d'
-            return json.dumps({"ticker": ticker_symbol, "period": period, "interval": interval, "data": hist_data})
-        else:
-            return json.dumps({"error": f"No historical data found for {ticker_symbol} with period {period} and interval {interval}. Check ticker or parameters."})
-    except Exception as e:
-        return json.dumps({"error": f"An error occurred while fetching historical data for {ticker_symbol}: {str(e)}"})
+# Place content in each column
+with col1:
+    st.write("i love you")
 
-# Map tool names to actual functions
-tool_functions = {
-    "get_stock_price": get_stock_price,
-    "get_company_info": get_company_info,
-    "get_historical_data": get_historical_data,
-}
+with col2:
+    st.write("what???")
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Gemini Stock Chatbot", layout="wide")
+with col3:
+    st.write("I love you dearly")
 
-st.title("📈 Gemini Stock Chatbot")
-st.markdown("Ask me about stock prices, company info, or historical data!")
-
-# Main chat display area
-chat_display_area = st.container()
-
-with chat_display_area:
-    for message in st.session_state.chat_history:
-        if message["role"] == "user":
-            st.chat_message("user").write(message["parts"][0]["text"])
-        elif message["role"] == "model":
-            # Check if the model's response contains tool calls or tool outputs
-            if any(part.function_call for part in message["parts"]):
-                # This is a tool call/response, which we'll handle internally,
-                # but we can show a brief message that a tool was used.
-                # For simplicity, we'll just show the final text response from Gemini.
-                # The actual tool execution and response are handled in the background.
-                pass # We only want to display the final text response from the model
-            elif any(part.function_response for part in message["parts"]):
-                pass # Don't display raw tool responses, only the model's summary
-            else:
-                st.chat_message("assistant").write(message["parts"][0]["text"])
-
-# Chat input in the sidebar
+# --- Chatbot in Sidebar ---
 with st.sidebar:
-    st.header("Chat with Gemini")
-    user_input = st.chat_input("Enter your query:", key="chat_input", on_submit=None) # on_submit=None to allow manual submit
+    st.title("🤖 Gemini-Powered Chatbot")
+    st.markdown("Ask me anything! I can even fetch **live stock prices** (e.g., 'What is Apple's stock price?', 'Tell me about GOOGL stock').")
 
-    if user_input:
-        # Add user message to chat history
-        st.session_state.chat_history.append({"role": "user", "parts": [{"text": user_input}]})
-        st.chat_message("user").write(user_input)
+    # Initialize chat history in session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        st.session_state.messages.append({"role": "assistant", "content": "Hello! How can I help you today?"})
+
+    # Display previous messages from chat history
+    chat_container = st.container(height=400, border=True) # Fixed height for scrollability in sidebar
+    for message in st.session_state.messages:
+        with chat_container.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # --- Chat Input and Response Logic ---
+    if prompt := st.chat_input("What's on your mind?", key="sidebar_chat_input"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with chat_container.chat_message("user"):
+            st.markdown(prompt)
+
+        # Prepare chat history for Gemini (includes role and structured parts)
+        chat_history_for_gemini = []
+        for msg in st.session_state.messages:
+            gemini_role = "user" if msg["role"] == "user" else "model"
+            content_parts = [{"text": msg["content"]}]
+            chat_history_for_gemini.append({"role": gemini_role, "parts": content_parts})
+
+        # Start a chat session with the history
+        # Exclude the current user prompt from initial history passed to start_chat
+        chat = model.start_chat(history=chat_history_for_gemini[:-1])
 
         with st.spinner("Thinking..."):
             try:
-                # Send user message to Gemini
-                response = st.session_state.chat.send_message(user_input)
+                response = chat.send_message(prompt)
 
-                # Process potential tool calls
-                tool_responses = []
-                for part in response.candidates[0].content.parts:
-                    if part.function_call:
-                        function_call = part.function_call
-                        function_name = function_call.name
-                        args = {key: value for key, value in function_call.args.items()}
+                gemini_response_text = "I'm sorry, I couldn't get a clear response." # Default message
 
-                        st.info(f"Gemini wants to call tool: `{function_name}` with arguments: `{args}`")
+                if response.candidates:
+                    first_candidate = response.candidates[0]
+                    
+                    # Check if Gemini wants to call a function
+                    if first_candidate.function_calls:
+                        for function_call in first_candidate.function_calls:
+                            function_name = function_call.name
+                            function_args = {k: v for k, v in function_call.args.items()}
 
-                        if function_name in tool_functions:
-                            # Execute the tool function
-                            tool_output = tool_functions[function_name](**args)
-                            tool_responses.append(tool_output)
-                            st.session_state.chat_history.append(
-                                genai.protos.Part(
-                                    function_response=genai.protos.FunctionResponse(
-                                        name=function_name,
-                                        response=json.loads(tool_output) # Ensure response is a dict/JSON object
-                                    )
-                                )
-                            )
-                        else:
-                            error_msg = f"Error: Tool '{function_name}' not found."
-                            tool_responses.append(json.dumps({"error": error_msg}))
-                            st.session_state.chat_history.append(
-                                genai.protos.Part(
-                                    function_response=genai.protos.FunctionResponse(
-                                        name=function_name,
-                                        response={"error": error_msg}
-                                    )
-                                )
-                            )
+                            st.info(f"DEBUG: Gemini requested tool: `{function_name}` with args: `{function_args}`")
 
-                # If there were tool responses, send them back to Gemini for a final text response
-                if tool_responses:
-                    # Append the tool responses to the chat history, then send to model again
-                    # The `send_message` method automatically handles adding the response to history
-                    # and sending tool outputs back to the model.
-                    final_response = st.session_state.chat.send_message(tool_responses)
-                    model_response_text = final_response.text
-                else:
-                    # If no tool calls, just get the text directly
-                    model_response_text = response.text
+                            if function_name == "get_stock_price":
+                                tool_output = get_stock_price(**function_args)
+                                
+                                st.info(f"DEBUG: Tool output: {tool_output}")
 
-                # Add model's final text response to chat history and display
-                st.session_state.chat_history.append({"role": "model", "parts": [{"text": model_response_text}]})
-                st.chat_message("assistant").write(model_response_text)
+                                # Send the tool's output back to Gemini
+                                tool_response_content = genai.ToolCodeResult(function_name=function_name, stdout=tool_output)
+                                
+                                # Get the final natural language response from Gemini
+                                final_response_from_tool = chat.send_message(tool_response_content)
+                                gemini_response_text = final_response_from_tool.text
+                            else:
+                                gemini_response_text = f"Error: Unknown tool '{function_name}' requested."
+                    else:
+                        # Gemini returned a text response directly (no function call)
+                        gemini_response_text = response.text
+                
+                # Check for safety feedback even if no candidate was generated
+                if response.prompt_feedback and response.prompt_feedback.safety_ratings:
+                    # You might want to display safety feedback in a more user-friendly way
+                    st.warning(f"Response blocked due to safety concerns: {response.prompt_feedback.safety_ratings}")
+                    gemini_response_text = "I'm sorry, I cannot provide a response for that query due to safety guidelines."
+
+
+                # Add Gemini's final response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": gemini_response_text})
+                with chat_container.chat_message("assistant"):
+                    st.markdown(gemini_response_text)
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
-                st.session_state.chat_history.append({"role": "model", "parts": [{"text": f"Sorry, I encountered an error: {e}"}]})
-                st.chat_message("assistant").write(f"Sorry, I encountered an error: {e}")
+                st.warning("Please try again or check your API key and network connection.")
 
-        # Rerun to update the chat display
-        st.experimental_rerun()
+    # Optional: Clear chat history button
+    st.markdown("---") # Separator
+    if st.button("Clear Chat", key="clear_chat_button"):
+        st.session_state.messages = []
+        st.session_state.messages.append({"role": "assistant", "content": "Chat history cleared. How can I help you now?"})
+        st.rerun() # Rerun the app to clear the displayed messages
 
-st.sidebar.markdown("""
----
-**How to use:**
-1.  **Create a `.env` file** in the same directory as this script and add `GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE"`.
-2.  Ask questions like:
-    * "What is the price of GOOGL?"
-    * "Tell me about Apple."
-    * "Show me the historical data for MSFT for the last 6 months."
-    * "What was Amazon's price in 2023?" (Note: For specific dates, Gemini might need more context or you might need to refine the prompt.)
-""")
