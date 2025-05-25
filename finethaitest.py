@@ -3,15 +3,26 @@ import google.generativeai as genai
 import yfinance as yf
 import json # For handling tool output
 import pandas as pd # For displaying historical data nicely
+import os # For environment variables
+from dotenv import load_dotenv # Import load_dotenv
 
 # --- Configuration ---
-# Load Gemini API key from Streamlit secrets
+# Load environment variables from .env file
+load_dotenv()
+
+# Load Gemini API key from environment variables
 try:
-    gemini_api_key = st.secrets["GEMINI_API_KEY"]
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        raise ValueError("GEMINI_API_KEY environment variable not set.")
     genai.configure(api_key=gemini_api_key)
-except KeyError:
-    st.error("Gemini API key not found. Please add it to your Streamlit secrets.toml file.")
+except ValueError as e:
+    st.error(f"Configuration error: {e}. Please ensure GEMINI_API_KEY is set in your .env file.")
     st.stop()
+except Exception as e:
+    st.error(f"An unexpected error occurred during API key configuration: {e}")
+    st.stop()
+
 
 # Initialize the Gemini model with tools
 # We'll define the tools that Gemini can use to interact with yfinance
@@ -152,7 +163,6 @@ with chat_display_area:
 # Chat input in the sidebar
 with st.sidebar:
     st.header("Chat with Gemini")
-    # Corrected indentation for user_input and subsequent if block
     user_input = st.chat_input("Enter your query:", key="chat_input", on_submit=None) # on_submit=None to allow manual submit
 
     if user_input:
@@ -225,7 +235,7 @@ with st.sidebar:
 st.sidebar.markdown("""
 ---
 **How to use:**
-1.  Enter your Gemini API key in `.streamlit/secrets.toml`.
+1.  **Create a `.env` file** in the same directory as this script and add `GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE"`.
 2.  Ask questions like:
     * "What is the price of GOOGL?"
     * "Tell me about Apple."
