@@ -1,174 +1,901 @@
+import yfinance as yf
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
-import google.generativeai as genai
-import os
-from dotenv import load_dotenv
-import yfinance as yf # Import yfinance library
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import requests
+import json
+import logging
+import pytz # Import pytz
+import os # Import os for environment variables
+from dotenv import load_dotenv # Import load_dotenv
 
-# --- Configuration ---
-# Load environment variables from a .env file (recommended for API keys)
-# Make sure you have a .env file in the same directory as app.py with:
-# GEMINI_API_KEY="YOUR_API_KEY_HERE"
+# Load environment variables from .env file
 load_dotenv()
 
-# Get the Gemini API key from environment variables
+# Configure logging
+logging.basicConfig(level=logging.ERROR) # Change to DEBUG for more detailed logs
+
+# World Bank API base URL
+WORLD_BANK_API_URL = "http://api.worldbank.org/v2/country/all/indicator/"
+
+# World Bank Series IDs
+GDP_SERIES_ID = "NY.GDP.MKTP.CD" # GDP (current US$)
+INFLATION_SERIES_ID = "FP.CPI.TOTL.ZG" # Inflation, consumer prices (annual %)
+
+# Gemini API Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
-if not GEMINI_API_KEY:
-    st.error("Gemini API key not found. Please set the GEMINI_API_KEY environment variable in a .env file.")
-    st.stop() # Stop the app if the key is missing
+def get_stock_data(symbol, start_date, end_date):
+    """
+    Fetches stock data from yfinance and calculates moving averages.
 
-# Configure the google.generativeai library with your API key
-genai.configure(api_key=GEMINI_API_KEY)
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
 
-# Initialize the Gemini model
-# CHANGED: Now using 'gemini-1.5-flash'
-# This model is optimized for speed and efficiency, suitable for high-volume, low-latency tasks.
-model = genai.GenerativeModel('gemini-1.5-flash')
+    Returns:
+        pandas.DataFrame: A DataFrame containing the stock data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching stock data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        df = stock.history(start=start_date, end=end_date, interval="1wk") # Weekly data
+        if df.empty:
+            error_message = f"No data found for symbol {symbol} within the specified date range."
+            st.error(error_message)
+            logging.error(error_message)
+            return None
 
-# --- Streamlit App UI ---
-# Set page configuration at the very beginning
-st.set_page_config(page_title="Gemini Chatbot with Layout", layout="centered")
+        # Calculate moving averages
+        df['MA50'] = df['Close'].rolling(window=50).mean()
+        df['MA200'] = df['Close'].rolling(window=200).mean()
 
-# --- Session State Initialization ---
-# Initialize chat history in session state if it doesn't exist
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "Hello! How can I help you today?"})
+        # Calculate RSI
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
 
-# Initialize stock data in session state
-if "stock_data" not in st.session_state:
-    st.session_state.stock_data = None
-if "current_ticker" not in st.session_state:
-    st.session_state.current_ticker = ""
+        logging.info(f"Successfully fetched and processed stock data for {symbol}")
+        return df
+    except Exception as e:
+        error_message = f"Error fetching stock data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
 
-# --- Main Body ---
-st.title("Streamlit Layout Test with Sidebar")
-st.write("This is a simple layout test to demonstrate Streamlit columns and a sidebar.")
+def plot_stock_data(df, symbol):
+    """
+    Plots the stock price as a candlestick chart and moving averages.
 
-# Divide body into 3 columns
-col1, col2, col3 = st.columns(3)
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the stock data.
+        symbol (str): The stock symbol.
 
-# Place content in each column
-with col1:
-    st.write("i love you")
+    Returns:
+        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_stock_data called with empty DataFrame for symbol {symbol}")
+        return None
 
-with col2:
-    st.write("what???")
+    try:
+        # Create the candlestick chart
+        fig = go.Figure(data=[go.Candlestick(
+            x=df.index,
+            open=df['Open'],
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            name=f'{symbol} Price'
+        )])
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA50'], name='50-day MA', line=dict(color='orange')))
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], name='200-day MA', line=dict(color='red')))
 
-with col3:
-    st.write("I love you dearly")
+        fig.update_layout(
+            title=f'{symbol} Stock Price with Moving Averages (Weekly)',
+            xaxis_title='Date',
+            yaxis_title='Price (USD)',
+            legend_title='Legend',
+            template='plotly_dark',
+            yaxis_type="log",
+            height=500,
+        )
+        logging.info(f"Successfully plotted stock data for {symbol}")
+        return fig
+    except Exception as e:
+        error_message = f"Error plotting stock data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
 
-st.markdown("---") # Separator
+def plot_rsi_data(df, symbol):
+    """
+    Plots the RSI data.
 
-# --- Stock Data Fetcher Section ---
-st.header("📈 Stock Data Fetcher")
-st.write("Enter a stock ticker symbol (e.g., AAPL, GOOGL) to fetch its historical data.")
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the stock data.
+        symbol (str): The stock symbol.
 
-ticker_input = st.text_input("Enter Ticker Symbol", value=st.session_state.current_ticker, key="ticker_symbol_input")
+    Returns:
+        plotly.graph_objects.Figure: The RSI plot, or None if the DataFrame is empty or RSI is missing.
+    """
+    if df is None or df.empty or 'RSI' not in df:
+        logging.warning(f"plot_rsi_data called with empty DataFrame or missing RSI for symbol {symbol}")
+        return None
 
-if st.button("Fetch Stock Data", key="fetch_stock_data_button"):
-    if ticker_input:
-        st.session_state.current_ticker = ticker_input.upper()
+    try:
+        # Create the RSI plot
+        fig_rsi = go.Figure(data=[go.Scatter(
+            x=df.index,
+            y=df['RSI'],
+            name='RSI',
+            line=dict(color='blue')
+        )])
+
+        # Define the layout for the RSI plot
+        fig_rsi.update_layout(
+            title=f'{symbol} Relative Strength Index (RSI)',
+            xaxis_title='Date',
+            yaxis_title='RSI',
+            template='plotly_dark',
+            height=300,
+            yaxis_range=[0, 100] # Ensure y-axis range is 0-100 for RSI
+        )
+        logging.info(f"Successfully plotted RSI data for {symbol}")
+        return fig_rsi
+    except Exception as e:
+        error_message = f"Error plotting RSI data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+
+def get_revenue_data(symbol, start_date, end_date):
+    """
+    Fetches revenue data from yfinance, filtered by date range.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the revenue data,
+                          or None if an error occurs or no revenue data is available.
+    """
+    try:
+        logging.info(f"Fetching revenue data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        # Fetch quarterly revenue
+        revenue_data = stock.quarterly_income_stmt
+        if revenue_data is None or revenue_data.empty:
+            logging.warning(f"No revenue data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        revenue_df = revenue_data.T
+        revenue_df.index = pd.to_datetime(revenue_df.index)
+        revenue_df = revenue_df.sort_index() # Sort by date
+
+        # Select the revenue column
+        if 'Total Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Total Revenue']]
+        elif 'Revenue' in revenue_df.columns:
+            revenue_df = revenue_df[['Revenue']]
+        else:
+            logging.warning(f"No Revenue or Total Revenue column found for symbol {symbol}")
+            return None
+        
+        # Filter by date range
+        revenue_df = revenue_df[(revenue_df.index >= start_date) & (revenue_df.index <= end_date)]
+        revenue_df = revenue_df.dropna()
+
+        logging.info(f"Successfully fetched revenue data for {symbol}")
+        return revenue_df
+    except Exception as e:
+        error_message = f"Error fetching revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_revenue_data(df, symbol):
+    """
+    Plots the revenue data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the revenue data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The revenue plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_revenue_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the revenue plot
+        fig_revenue = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df.iloc[:, 0], # Use the first column for revenue data
+            name='Revenue',
+            marker_color='purple'
+        )])
+
+        # Define the layout for the revenue plot
+        fig_revenue.update_layout(
+            title=f'{symbol} Quarterly Revenue',
+            xaxis_title='Date',
+            yaxis_title='Revenue',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted revenue data for {symbol}")
+        return fig_revenue
+    except Exception as e:
+        error_message = f"Error plotting revenue data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def get_dividend_data(symbol, start_date, end_date):
+    """
+    Fetches dividend data from yfinance.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the dividend data,
+                          or None if an error occurs.
+    """
+    try:
+        logging.info(f"Fetching dividend data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        dividends = stock.dividends
+        if dividends.empty:
+            logging.warning(f"No dividend data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame
+        dividends_df = pd.DataFrame(dividends)
+        dividends_df.index = pd.to_datetime(dividends_df.index)
+
+        # Filter by date range, handling timezones
+        start_date_tz = start_date.replace(tzinfo=pytz.utc) # Ensure start_date is UTC
+        end_date_tz = end_date.replace(tzinfo=pytz.utc)     # Ensure end_date is UTC
+
+        dividends_df = dividends_df[(dividends_df.index >= start_date_tz) & (dividends_df.index <= end_date_tz)]
+        dividends_df = dividends_df.sort_index()
+
+        logging.info(f"Successfully fetched dividend data for {symbol}")
+        return dividends_df
+    except Exception as e:
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_dividend_data(df, symbol):
+    """
+    Plots the dividend data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the dividend data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The dividend plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_dividend_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the dividend plot
+        fig_dividend = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Dividends'],
+            name='Dividends',
+            marker_color='green'
+        )])
+
+        # Define the layout for the dividend plot
+        fig_dividend.update_layout(
+            title=f'{symbol} Dividends',
+            xaxis_title='Date',
+            yaxis_title='Dividends (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted dividend data for {symbol}")
+        return fig_dividend
+    except Exception as e:
+        error_message = f"Error plotting dividend data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+def get_quarterly_free_cash_flow_data(symbol, start_date, end_date):
+    """
+    Fetches quarterly free cash flow data from yfinance, filtered by date range.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the free cash flow data,
+                          or None if an error occurs or no free cash flow data is available.
+    """
+    try:
+        logging.info(f"Fetching quarterly free cash flow data for {symbol} from {start_date} to {end_date}")
+        stock = yf.Ticker(symbol)
+        # Fetch quarterly cash flow
+        cashflow_data = stock.quarterly_cashflow
+        if cashflow_data is None or cashflow_data.empty:
+            logging.warning(f"No quarterly cash flow data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        cashflow_df = cashflow_data.T
+        cashflow_df.index = pd.to_datetime(cashflow_df.index)
+        cashflow_df = cashflow_df.sort_index() # Sort by date
+
+        # Select the 'Free Cash Flow' column (it's a column in this structure)
+        if 'Free Cash Flow' in cashflow_df.columns:
+            free_cash_flow_df = cashflow_df[['Free Cash Flow']]
+        else:
+            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in quarterly cash flow data.")
+            return None
+        
+        # Filter by date range
+        free_cash_flow_df = free_cash_flow_df[(free_cash_flow_df.index >= start_date) & (free_cash_flow_df.index <= end_date)]
+        free_cash_flow_df = free_cash_flow_df.dropna()
+
+
+        logging.info(f"Successfully fetched quarterly free cash flow data for {symbol}")
+        return free_cash_flow_df
+    except Exception as e:
+        error_message = f"Error fetching quarterly free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_quarterly_free_cash_flow_data(df, symbol):
+    """
+    Plots the quarterly free cash flow data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the free cash flow data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The free cash flow plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_quarterly_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the free cash flow plot
+        fig_free_cash_flow = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Free Cash Flow'], # Use the 'Free Cash Flow' column
+            name='Free Cash Flow',
+            marker_color='teal'
+        )])
+
+        # Define the layout for the free cash flow plot
+        fig_free_cash_flow.update_layout(
+            title=f'{symbol} Quarterly Free Cash Flow',
+            xaxis_title='Date',
+            yaxis_title='Free Cash Flow (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted quarterly free cash flow data for {symbol}")
+        return fig_free_cash_flow
+    except Exception as e:
+        error_message = f"Error plotting quarterly free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def get_annual_free_cash_flow_data(symbol, start_date, end_date):
+    """
+    Fetches annual free cash flow data from yfinance, filtered by date range.
+
+    Args:
+        symbol (str): The stock symbol (e.g., 'AAPL').
+        start_date (datetime): The start date for filtering.
+        end_date (datetime): The end date for filtering.
+
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the annual free cash flow data,
+                          or None if an error occurs or no free cash flow data is available.
+    """
+    try:
+        logging.info(f"Fetching annual free cash flow data for {symbol}")
+        stock = yf.Ticker(symbol)
+        # Fetch annual cash flow
+        cashflow_data = stock.cashflow
+        if cashflow_data is None or cashflow_data.empty:
+            logging.warning(f"No annual cash flow data found for symbol {symbol}")
+            return None
+
+        # Convert to DataFrame and transpose
+        cashflow_df = cashflow_data.T
+        cashflow_df.index = pd.to_datetime(cashflow_df.index)
+        cashflow_df = cashflow_df.sort_index() # Sort by date
+
+        # Select the 'Free Cash Flow' column
+        if 'Free Cash Flow' in cashflow_df.columns:
+            free_cash_flow_df = cashflow_df[['Free Cash Flow']]
+        else:
+            logging.warning(f"No 'Free Cash Flow' column found for symbol {symbol} in annual cash flow data.")
+            return None
+
+        # Filter by date range
+        free_cash_flow_df = free_cash_flow_df[(free_cash_flow_df.index >= start_date) & (free_cash_flow_df.index <= end_date)]
+        free_cash_flow_df = free_cash_flow_df.dropna()
+
+
+        logging.info(f"Successfully fetched annual free cash flow data for {symbol}")
+        return free_cash_flow_df
+    except Exception as e:
+        error_message = f"Error fetching annual free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def plot_annual_free_cash_flow_data(df, symbol):
+    """
+    Plots the annual free cash flow data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the annual free cash flow data.
+        symbol (str): The stock symbol.
+
+    Returns:
+        plotly.graph_objects.Figure: The free cash flow plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning(f"plot_annual_free_cash_flow_data called with empty DataFrame for symbol {symbol}")
+        return None
+
+    try:
+        # Create the free cash flow plot
+        fig_free_cash_flow = go.Figure(data=[go.Bar(
+            x=df.index,
+            y=df['Free Cash Flow'], # Use the 'Free Cash Flow' column
+            name='Free Cash Flow',
+            marker_color='orange' # Using a different color for annual
+        )])
+
+        # Define the layout for the free cash flow plot
+        fig_free_cash_flow.update_layout(
+            title=f'{symbol} Annual Free Cash Flow',
+            xaxis_title='Date',
+            yaxis_title='Free Cash Flow (USD)',
+            template='plotly_dark',
+            height=300,
+        )
+        logging.info(f"Successfully plotted annual free cash flow data for {symbol}")
+        return fig_free_cash_flow
+    except Exception as e:
+        error_message = f"Error plotting annual free cash flow data for {symbol}: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+def get_economic_data(start_date, end_date):
+    """
+    Fetches US GDP and Inflation data from the World Bank API.
+
+    Args:
+        start_date (datetime): The start date for the data.
+        end_date (datetime): The end date for the data.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the GDP and Inflation data,
+                          or None if an error occurs or no data is available.
+    """
+    try:
+        logging.info(f"Fetching economic data from World Bank for {start_date.year} to {end_date.year}")
+        
+        # World Bank API uses annual data, so use the year range
+        date_range = f"{start_date.year}:{end_date.year}"
+
+        # Construct API URLs for GDP and Inflation
+        gdp_url = f"{WORLD_BANK_API_URL}{GDP_SERIES_ID}?date={date_range}&format=json&per_page=1000"
+        inflation_url = f"{WORLD_BANK_API_URL}{INFLATION_SERIES_ID}?date={date_range}&format=json&per_page=1000"
+
+        # Fetch data
         try:
-            # Fetch historical data for the last 30 days
-            ticker = yf.Ticker(st.session_state.current_ticker)
-            hist = ticker.history(period="30d")
-            if not hist.empty:
-                st.session_state.stock_data = hist
-                st.success(f"Successfully fetched data for {st.session_state.current_ticker}!")
-                st.dataframe(hist.tail()) # Display last few rows
+            gdp_response = requests.get(gdp_url)
+            gdp_response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+            inflation_response = requests.get(inflation_url)
+            inflation_response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            error_message = f"Error fetching data from World Bank API: {e}"
+            st.error(error_message)
+            logging.error(error_message, exc_info=True)
+            return None
+
+        # Parse JSON responses
+        try:
+            gdp_data = json.loads(gdp_response.text)
+            inflation_data = json.loads(inflation_response.text)
+        except json.JSONDecodeError as e:
+            error_message = f"Error decoding JSON response from World Bank API: {e}"
+            st.error(error_message)
+            logging.error(error_message, exc_info=True)
+            return None
+
+        # World Bank API returns a list of lists, the second list contains the data
+        gdp_observations = gdp_data[1] if len(gdp_data) > 1 else []
+        inflation_observations = inflation_data[1] if len(inflation_data) > 1 else []
+
+        if not gdp_observations and not inflation_observations:
+             error_message = "No economic data found from World Bank for the specified date range."
+             st.warning(error_message)
+             logging.warning(error_message)
+             return None
+
+        # Convert data to pandas DataFrames
+        gdp_df = pd.DataFrame(gdp_observations)
+        inflation_df = pd.DataFrame(inflation_observations)
+
+        economic_df = None
+
+        # Process GDP data if available
+        if not gdp_df.empty:
+            gdp_df = gdp_df[['date', 'value']].copy() # Select relevant columns
+            gdp_df['date'] = pd.to_datetime(gdp_df['date'])
+            gdp_df['value'] = pd.to_numeric(gdp_df['value'], errors='coerce')
+            gdp_df = gdp_df.rename(columns={'value': 'GDP'})
+            gdp_df = gdp_df.dropna()
+            economic_df = gdp_df.set_index('date')
+
+
+        # Process Inflation data if available
+        if not inflation_df.empty:
+            inflation_df = inflation_df[['date', 'value']].copy() # Select relevant columns
+            inflation_df['date'] = pd.to_datetime(inflation_df['date'])
+            inflation_df['value'] = pd.to_numeric(inflation_df['value'], errors='coerce')
+            inflation_df = inflation_df.rename(columns={'value': 'Inflation'})
+            inflation_df = inflation_df.dropna()
+
+            if economic_df is None:
+                economic_df = inflation_df.set_index('date')
             else:
-                st.session_state.stock_data = None
-                st.warning(f"No historical data found for {st.session_state.current_ticker}. Please check the ticker symbol.")
-        except Exception as e:
-            st.session_state.stock_data = None
-            st.error(f"Error fetching data for {st.session_state.current_ticker}: {e}")
+                # Merge with GDP data
+                economic_df = pd.merge(economic_df, inflation_df.set_index('date'), left_index=True, right_index=True, how='outer')
+
+
+        if economic_df is not None and not economic_df.empty:
+            economic_df = economic_df.sort_index()
+            logging.info("Successfully fetched and processed economic data from World Bank.")
+            return economic_df
+        else:
+            error_message = "Failed to process economic data from World Bank."
+            st.error(error_message)
+            logging.error(error_message)
+            return None
+
+
+    except Exception as e: # Catch any exception
+        error_message = f"Error occurred while fetching economic data from World Bank: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+
+
+def plot_economic_data(df):
+    """
+    Plots the US GDP (Bar) and Inflation (Line) data.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the economic data.
+
+    Returns:
+        plotly.graph_objects.Figure: The plot, or None if the DataFrame is empty.
+    """
+    if df is None or df.empty:
+        logging.warning("plot_economic_data called with empty DataFrame")
+        return None
+
+    try:
+        fig = go.Figure()
+        
+        # Determine which data is available and add traces accordingly
+        if 'GDP' in df.columns and 'Inflation' in df.columns:
+            # Add GDP trace as a Bar chart
+            fig.add_trace(go.Bar(x=df.index, y=df['GDP'], name='US GDP (Current USD)', marker_color='green'))
+            # Add Inflation trace as a Scatter (Line) chart
+            fig.add_trace(go.Scatter(x=df.index, y=df['Inflation'], name='US Inflation (Annual %)', line=dict(color='blue'), yaxis="y2"))
+
+            # Define layout with two y-axes
+            fig.update_layout(
+                title='US GDP (Annual) and Inflation (Annual)',
+                xaxis_title='Date',
+                yaxis_title='US GDP (Current USD)',
+                yaxis2=dict(
+                    title='US Inflation (Annual %)',
+                    overlaying='y',
+                    side='right'
+                ),
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        elif 'GDP' in df.columns:
+            # Add GDP trace as a Bar chart
+            fig.add_trace(go.Bar(x=df.index, y=df['GDP'], name='US GDP (Current USD)', marker_color='green'))
+            fig.update_layout(
+                title='US GDP (Annual)',
+                xaxis_title='Date',
+                yaxis_title='US GDP (Current USD)',
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        elif 'Inflation' in df.columns:
+            # Add Inflation trace as a Scatter (Line) chart
+            fig.add_trace(go.Scatter(x=df.index, y=df['Inflation'], name='US Inflation (Annual %)', line=dict(color='blue')))
+            fig.update_layout(
+                title='US Inflation (Annual)',
+                xaxis_title='Date',
+                yaxis_title='US Inflation (Annual %)',
+                legend_title='Legend',
+                template='plotly_dark',
+                height=500,
+            )
+        else:
+            error_message = "No valid data to plot in economic data"
+            st.error(error_message)
+            logging.error(error_message)
+            return None
+        
+        logging.info("Successfully plotted economic data.")
+        return fig
+    except Exception as e:
+        error_message = f"Error plotting economic data: {e}"
+        st.error(error_message)
+        logging.error(error_message, exc_info=True)
+        return None
+
+def get_gemini_response(user_prompt, stock_summary=""):
+    """
+    Sends a prompt to the Google Gemini API and returns the response.
+
+    Args:
+        user_prompt (str): The user's query.
+        stock_summary (str): A summary of the fetched stock data, if available.
+
+    Returns:
+        str: The Gemini model's response, or an error message.
+    """
+    if not GEMINI_API_KEY:
+        return "Gemini API key not found. Please set it in your .env file."
+
+    full_prompt = f"Stock Data Summary: {stock_summary}\n\nUser Query: {user_prompt}" if stock_summary else user_prompt
+    
+    chat_history = []
+    chat_history.append({"role": "user", "parts": [{"text": full_prompt}]})
+    
+    payload = {
+        "contents": chat_history,
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(f"{GEMINI_API_URL}?key={GEMINI_API_KEY}", headers=headers, data=json.dumps(payload))
+        response.raise_for_status() # Raise an exception for HTTP errors
+        result = response.json()
+        
+        if result.get('candidates') and result['candidates'][0].get('content') and result['candidates'][0]['content'].get('parts'):
+            return result['candidates'][0]['content']['parts'][0]['text']
+        else:
+            logging.error(f"Unexpected Gemini API response structure: {result}")
+            return "Error: Could not get a valid response from the Gemini API."
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Gemini API request failed: {e}")
+        return f"Error connecting to Gemini API: {e}"
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to decode JSON from Gemini API response: {e}")
+        return "Error: Invalid JSON response from Gemini API."
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during Gemini API call: {e}")
+        return f"An unexpected error occurred: {e}"
+
+
+def main():
+    """
+    Main function to run the Streamlit application.
+    """
+    st.set_page_config(layout="wide") # Wide mode
+
+    # Initialize session state for chat history and stock data summary if not present
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'stock_data_summary' not in st.session_state:
+        st.session_state.stock_data_summary = ""
+
+    # Sidebar
+    st.sidebar.title('Enthusiast Space for Finance') # Updated title here
+    default_stock = "AAPL" # Set Apple as the default
+    stock_symbol = st.sidebar.text_input('Enter Stock Symbol (e.g., AAPL, GOOG, MSFT)', default_stock).upper()
+
+    # Date range selection using buttons in sidebar
+    st.sidebar.subheader("Select Date Range")
+    today = datetime.today()
+    years = [1, 5, 10, 20, 25]
+    cols = st.sidebar.columns(len(years)) # create as many columns as there are years
+    selected_time_frame = st.session_state.get('selected_time_frame', 5) # Persist selected time frame
+    for i, year in enumerate(years):
+        with cols[i]: # iterate through the columns
+            if st.button(f"{year} Year{'s' if year > 1 else ''}", key=f"year_button_{year}"):
+                st.session_state.selected_time_frame = year
+                st.rerun() # Rerun to apply new date range immediately
+    
+    start_date = today - relativedelta(years=st.session_state.selected_time_frame)
+    end_date = today
+
+    # Main page
+    st.title('Enthusiast Space for Finance') # Main title
+    # Add the description here
+    st.write("Enthusiast Space for Finance helps you look at different companies' stocks and the overall economy. You tell it which company you're interested in and how far back you want to look, it gets the stock data and important economic numbers. Then, it shows all of this to you in easy-to-understand charts.")
+
+    st.header(f"Stock Data for {stock_symbol}")
+    # Fetch and plot stock data
+    stock_df = get_stock_data(stock_symbol, start_date, end_date)
+    if stock_df is not None:
+        stock_fig = plot_stock_data(stock_df, stock_symbol)
+        if stock_fig is not None:
+            st.plotly_chart(stock_fig, use_container_width=True)
+            # Generate a summary of stock data for the chatbot
+            if not stock_df.empty:
+                latest_close = stock_df['Close'].iloc[-1]
+                ma50 = stock_df['MA50'].iloc[-1] if 'MA50' in stock_df.columns else 'N/A'
+                ma200 = stock_df['MA200'].iloc[-1] if 'MA200' in stock_df.columns else 'N/A'
+                rsi = stock_df['RSI'].iloc[-1] if 'RSI' in stock_df.columns else 'N/A'
+                st.session_state.stock_data_summary = (
+                    f"Current stock symbol: {stock_symbol}. "
+                    f"Latest Close Price: ${latest_close:.2f}. "
+                    f"50-day Moving Average: ${ma50:.2f}. "
+                    f"200-day Moving Average: ${ma200:.2f}. "
+                    f"Relative Strength Index (RSI): {rsi:.2f}."
+                )
+            else:
+                st.session_state.stock_data_summary = f"No stock data available for {stock_symbol}."
+        else:
+            st.warning("No stock plot to display.") # show a warning message
+            st.session_state.stock_data_summary = f"No stock data available for {stock_symbol}."
     else:
-        st.warning("Please enter a ticker symbol.")
+        st.session_state.stock_data_summary = f"No stock data available for {stock_symbol}."
+    
+    # RSI Explanation
+    with st.expander("Relative Strength Index (RSI)"):
+        
+        # Plot RSI data
+        if stock_df is not None:
+            rsi_fig = plot_rsi_data(stock_df, stock_symbol)
+            if rsi_fig is not None:
+                st.plotly_chart(rsi_fig, use_container_width=True)
+            else:
+                st.warning("No RSI plot to display.")
+    
+    # Fetch and plot dividend data in expander
+    with st.expander("Dividends"):
+        dividend_df = get_dividend_data(stock_symbol, start_date, end_date)
+        if dividend_df is not None:
+            dividend_fig = plot_dividend_data(dividend_df, stock_symbol)
+            if dividend_fig is not None:
+                st.plotly_chart(dividend_fig, use_container_width=True)
+            else:
+                st.warning("No dividend plot to display.")
+        else:
+            st.info("Dividend data is not available for this stock within the selected date range.")
 
-# Display fetched stock data if available
-if st.session_state.stock_data is not None:
-    st.subheader(f"Historical Data for {st.session_state.current_ticker}")
-    st.dataframe(st.session_state.stock_data)
+    # Fetch and plot revenue data in expander
+    with st.expander("Quarterly Revenue"):
+        revenue_start_date = datetime(2000, 1, 1)
+        revenue_df = get_revenue_data(stock_symbol, revenue_start_date, end_date)
+        if revenue_df is not None:
+            revenue_fig = plot_revenue_data(revenue_df, stock_symbol)
+            if revenue_fig is not None:
+                st.plotly_chart(revenue_fig, use_container_width=True)
+            else:
+                st.warning("No revenue plot to display.")
+        else:
+            st.info("Revenue data is not available for this stock within the selected date range.")
+    
+    # Add new expander for Annual Free Cash Flow
+    with st.expander("Annual Free Cash Flow"):
+        st.markdown("Annual Free Cash Flow represents the cash a company has left over after covering its operating expenses and capital expenditures over a year.")
+        # Pass start_date and end_date to the function
+        annual_free_cash_flow_df = get_annual_free_cash_flow_data(stock_symbol, start_date, end_date)
+        if annual_free_cash_flow_df is not None:
+            annual_free_cash_flow_fig = plot_annual_free_cash_flow_data(annual_free_cash_flow_df, stock_symbol)
+            if annual_free_cash_flow_fig is not None:
+                st.plotly_chart(annual_free_cash_flow_fig, use_container_width=True)
+            else:
+                st.warning("No annual free cash flow plot to display.")
+        else:
+            st.info("Annual free cash flow data is not available for this stock.")
 
-st.markdown("---") # Separator
+    # Keep existing expander for Quarterly Free Cash Flow
+    with st.expander("Quarterly Free Cash Flow"):
+        quarterly_free_cash_flow_start_date = datetime(2000, 1, 1)
+        quarterly_free_cash_flow_df = get_quarterly_free_cash_flow_data(stock_symbol, quarterly_free_cash_flow_start_date, end_date)
+        if quarterly_free_cash_flow_df is not None:
+            quarterly_free_cash_flow_fig = plot_quarterly_free_cash_flow_data(quarterly_free_cash_flow_df, stock_symbol)
+            if quarterly_free_cash_flow_fig is not None:
+                st.plotly_chart(quarterly_free_cash_flow_fig, use_container_width=True)
+            else:
+                st.warning("No quarterly free cash flow plot to display.")
+        else:
+            st.info("Quarterly free cash flow data is not available for this stock within the selected date range.")
 
-# --- Chatbot in Sidebar ---
-# Streamlit only supports one sidebar, which is on the left
-with st.sidebar:
-    st.title("🤖 Gemini-Powered Chatbot")
-    st.markdown("Ask me anything! I'm powered by Google's Gemini AI. This simple bot remembers your current conversation.")
-    st.markdown("If you've fetched stock data, I can answer questions about it!")
 
-    # Display previous messages from chat history
-    # Use a container to make the chat messages scrollable if they get too long
-    chat_container = st.container(height=400, border=True) # Fixed height for scrollability in sidebar
-    for message in st.session_state.messages:
-        with chat_container.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Fetch and plot economic data in expander
+    with st.expander("Economic Data: GDP and Inflation"): # Updated expander title
+        economic_df = get_economic_data(start_date, end_date)
+        if economic_df is not None:
+            economic_fig = plot_economic_data(economic_df)
+            if economic_fig is not None:
+                st.plotly_chart(economic_fig, use_container_width=True)
+            else:
+                st.warning("No economic data plot to display.")
+        else:
+            st.info("Unable to fetch economic data from World Bank.") # Updated info message
 
-    # --- Chat Input and Response Logic ---
-    # Get user input from the chat input box
-    # Using a unique key for the chat input in the sidebar
-    if prompt := st.chat_input("What's on your mind?", key="sidebar_chat_input"):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with chat_container.chat_message("user"): # Display in the chat container
-            st.markdown(prompt)
+    # Chatbot Interface in Sidebar
+    st.sidebar.subheader("Chat with Gemini")
+    chat_container = st.sidebar.container()
 
-        # Prepare context from stock data if available
-        stock_context = ""
-        if st.session_state.stock_data is not None:
-            # Convert the last few rows of stock data to a string for context
-            stock_summary = st.session_state.stock_data.tail(5).to_string()
-            stock_context = f"\n\nHere is recent historical stock data for {st.session_state.current_ticker}:\n{stock_summary}\n\n"
-            st.info(f"Using stock data for {st.session_state.current_ticker} as context.")
+    for message in st.session_state.chat_history:
+        with chat_container:
+            st.markdown(f"**{message['role'].capitalize()}**: {message['parts'][0]['text']}")
 
-        # Generate response from Gemini
-        with st.spinner("Thinking..."): # Show a spinner while waiting for AI response
-            try:
-                # The Gemini models can handle chat, but their 'history' expectation
-                # can sometimes be slightly different for text-only turns.
-                # It's generally safest to explicitly send parts with 'text' key.
-                chat_history_for_gemini = []
-                for msg in st.session_state.messages:
-                    gemini_role = "user" if msg["role"] == "user" else "model"
-                    chat_history_for_gemini.append({"role": gemini_role, "parts": [{"text": msg["content"]}]})
+    user_input = st.sidebar.text_input("Ask Gemini about the stock or economy:", key="gemini_input")
 
-                # Prepend stock context to the current user prompt if available
-                current_prompt_with_context = stock_context + prompt
+    if user_input:
+        st.session_state.chat_history.append({"role": "user", "parts": [{"text": user_input}]})
+        
+        # Get response from Gemini, prepending stock data summary if available
+        response = get_gemini_response(user_input, st.session_state.stock_data_summary)
+        st.session_state.chat_history.append({"role": "model", "parts": [{"text": response}]})
+        
+        # Clear the input box after sending
+        st.session_state.gemini_input = ""
+        st.rerun() # Rerun to display new chat messages
 
-                # --- NEW ADDITION FOR TESTING ---
-                # Print the full prompt being sent to the Gemini API
-                print(f"\n--- Sending to Gemini ---\n{current_prompt_with_context}\n--------------------------\n")
-                # --- END NEW ADDITION ---
+    if st.sidebar.button("Clear Chat", key="clear_chat_button"):
+        st.session_state.chat_history = []
+        st.session_state.stock_data_summary = ""
+        st.rerun()
 
-                # Start a chat session with the history
-                # Exclude the current user prompt (which now includes context) from initial history passed to start_chat
-                # as it will be sent separately by chat.send_message()
-                chat = model.start_chat(history=chat_history_for_gemini[:-1])
 
-                # Send the current user prompt with context
-                response = chat.send_message(current_prompt_with_context)
-
-                # Access the text from the response
-                gemini_response_text = response.text
-
-                # Add Gemini's response to chat history
-                st.session_state.messages.append({"role": "assistant", "content": gemini_response_text})
-                with chat_container.chat_message("assistant"): # Display in the chat container
-                    st.markdown(gemini_response_text)
-
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
-                st.warning("Please try again or check your API key and network connection.")
-
-    # Optional: Clear chat history button
-    st.markdown("---") # Separator
-    # Using a unique key for the clear chat button in the sidebar
-    if st.button("Clear Chat", key="clear_chat_button"):
-        st.session_state.messages = []
-        st.session_state.messages.append({"role": "assistant", "content": "Chat history cleared. How can I help you now?"})
-        st.session_state.stock_data = None # Also clear stock data
-        st.session_state.current_ticker = "" # Also clear current ticker
-        st.rerun() # Rerun the app to clear the displayed messages
+if __name__ == "__main__":
+    main()
