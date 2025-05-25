@@ -740,6 +740,9 @@ def main():
         st.session_state.chat_history = []
     if 'stock_data_summary' not in st.session_state:
         st.session_state.stock_data_summary = ""
+    # Initialize selected_time_frame if not present
+    if 'selected_time_frame' not in st.session_state:
+        st.session_state.selected_time_frame = 5 # Default to 5 years
 
     # Sidebar
     st.sidebar.title('Enthusiast Space for Finance') # Updated title here
