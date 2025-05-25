@@ -8,6 +8,7 @@ import requests
 import json
 import logging
 import pytz # Import pytz
+import os # Import os to access environment variables
 
 # Configure logging
 logging.basicConfig(level=logging.ERROR) # Change to DEBUG for more detailed logs
@@ -18,6 +19,16 @@ WORLD_BANK_API_URL = "http://api.worldbank.org/v2/country/all/indicator/"
 # World Bank Series IDs
 GDP_SERIES_ID = "NY.GDP.MKTP.CD" # GDP (current US$)
 INFLATION_SERIES_ID = "FP.CPI.TOTL.ZG" # Inflation, consumer prices (annual %)
+
+# Gemini API Configuration
+# In a deployed Streamlit app, you would set this as a secret or environment variable.
+# For Canvas, if the user provides a .env file, this might work.
+# Otherwise, the API call will fail without a valid key.
+API_KEY = os.getenv("GEMINI_API_KEY", "")
+if not API_KEY:
+    logging.warning("GEMINI_API_KEY environment variable not set. Gemini API calls may fail.")
+
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 
 def get_stock_data(symbol, start_date, end_date):
@@ -674,6 +685,66 @@ def plot_economic_data(df):
         return None
 
 
+def get_gemini_response(prompt_text, full_chat_history):
+    """
+    Calls the Gemini API to generate a response.
+
+    Args:
+        prompt_text (str): The user's current prompt (already included in full_chat_history).
+        full_chat_history (list): List of all messages (user and model) including the current prompt.
+
+    Returns:
+        str: The generated text from Gemini, or an error message.
+    """
+    try:
+        logging.info("Calling Gemini API...")
+        
+        # Prepare chat history for the API call
+        # The API expects 'parts': [{'text': '...'}]
+        api_contents = []
+        for msg in full_chat_history:
+            api_contents.append({'role': msg['role'], 'parts': [{'text': msg['content']}]})
+        
+        payload = {
+            "contents": api_contents
+        }
+
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        
+        # Construct the URL with the API key
+        url = f"{GEMINI_API_URL}?key={API_KEY}"
+
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+        
+        result = response.json()
+        
+        if result.get('candidates') and len(result['candidates']) > 0 and \
+           result['candidates'][0].get('content') and \
+           result['candidates'][0]['content'].get('parts') and \
+           len(result['candidates'][0]['content']['parts']) > 0:
+            generated_text = result['candidates'][0]['content']['parts'][0]['text']
+            logging.info("Successfully received response from Gemini API.")
+            return generated_text
+        else:
+            # Handle cases where the response structure is unexpected or content is missing
+            logging.error(f"Unexpected response structure from Gemini API: {json.dumps(result, indent=2)}")
+            # Try to get a specific error message if available
+            error_message = result.get('error', {}).get('message', 'Unknown error from Gemini API.')
+            return f"Error: Could not get a valid response from Gemini. Details: {error_message}"
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Network or API error calling Gemini: {e}")
+        return f"Error connecting to Gemini: {e}"
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error from Gemini response: {e}")
+        return f"Error parsing Gemini response: {e}"
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during Gemini API call: {e}", exc_info=True)
+        return f"An unexpected error occurred: {e}"
+
 
 def main():
     """
@@ -698,6 +769,37 @@ def main():
                 selected_time_frame = year
     start_date = today - relativedelta(years=selected_time_frame)
     end_date = today
+
+    # Sidebar for Gemini Chat
+    st.sidebar.subheader("Gemini Chat")
+
+    # Initialize chat history in session state
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+        # Add a polite initial message from the model
+        st.session_state.chat_history.append({"role": "model", "content": "Hello! I'm Gemini 2.0 Flash. How can I help you with your financial analysis today?"})
+
+    # Display chat messages from history
+    for message in st.session_state.chat_history:
+        with st.sidebar.chat_message(message["role"]):
+            st.sidebar.markdown(message["content"])
+
+    # Chat input for the user
+    if prompt := st.sidebar.chat_input("Ask Gemini about finance..."):
+        # Add userstate.chat_history.append({"role": "user", "content": prompt})
+        # Display user message
+        with st.sidebar.chat_message("user"):
+            st.sidebar.markdown(prompt)
+
+        # Get response from Gemini
+        with st.spinner("Gemini is thinking..."):
+            gemini_response = get_gemini_response(prompt, st.session_state.chat_history)
+        
+        # Add model response to chat history
+        st.session_state.chat_history.append({"role": "model", "content": gemini_response})
+        # Display model response
+        with st.sidebar.chat_message("model"):
+            st.sidebar.markdown(gemini_response)
 
     # Main page
     st.title('Enthusiast Space for Finance') # Main title
