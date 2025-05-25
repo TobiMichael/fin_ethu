@@ -11,3 +11,6 @@ pytz
 plotly
 
 spacy
+
+google-generativeai
+python-dotenv
