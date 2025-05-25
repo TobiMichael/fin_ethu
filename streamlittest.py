@@ -20,9 +20,8 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize the Gemini model
-# 'gemini-pro' is suitable for text-based chat.
-# For multimodal (text + image), you might use 'gemini-pro-vision'.
-model = genai.GenerativeModel('gemini-1.5-pro')
+# CHANGED: Using 'gemini-1.0-pro' as requested
+model = genai.GenerativeModel('gemini-1.0-pro')
 
 # --- Streamlit App UI ---
 # Set page configuration at the very beginning
