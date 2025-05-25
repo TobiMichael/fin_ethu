@@ -28,46 +28,43 @@ except Exception as e:
 # We'll define the tools that Gemini can use to interact with yfinance
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
+    # Corrected: Directly provide the list of FunctionDeclaration objects
     tools=[
-        genai.Tool(
-            function_declarations=[
-                genai.FunctionDeclaration(
-                    name="get_stock_price",
-                    description="Get the current stock price for a given ticker symbol.",
-                    parameters=genai.FunctionParameters(
-                        type=genai.Type.OBJECT,
-                        properties={
-                            "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL').")
-                        },
-                        required=["ticker_symbol"],
-                    ),
-                ),
-                genai.FunctionDeclaration(
-                    name="get_company_info",
-                    description="Get general information about a company for a given ticker symbol.",
-                    parameters=genai.FunctionParameters(
-                        type=genai.Type.OBJECT,
-                        properties={
-                            "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL').")
-                        },
-                        required=["ticker_symbol"],
-                    ),
-                ),
-                genai.FunctionDeclaration(
-                    name="get_historical_data",
-                    description="Get historical stock data (Open, High, Low, Close, Volume) for a given ticker symbol and period.",
-                    parameters=genai.FunctionParameters(
-                        type=genai.Type.OBJECT,
-                        properties={
-                            "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL')."),
-                            "period": genai.Schema(type=genai.Type.STRING, description="The period for historical data (e.g., '1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max'). Defaults to '1mo' if not specified."),
-                            "interval": genai.Schema(type=genai.Type.STRING, description="The interval for historical data (e.g., '1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo'). Defaults to '1d' for periods > 7d, '1h' for periods <= 7d. Note: '1m' interval only available for last 7 days."),
-                        },
-                        required=["ticker_symbol"],
-                    ),
-                ),
-            ]
-        )
+        genai.FunctionDeclaration(
+            name="get_stock_price",
+            description="Get the current stock price for a given ticker symbol.",
+            parameters=genai.FunctionParameters(
+                type=genai.Type.OBJECT,
+                properties={
+                    "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL').")
+                },
+                required=["ticker_symbol"],
+            ),
+        ),
+        genai.FunctionDeclaration(
+            name="get_company_info",
+            description="Get general information about a company for a given ticker symbol.",
+            parameters=genai.FunctionParameters(
+                type=genai.Type.OBJECT,
+                properties={
+                    "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL').")
+                },
+                required=["ticker_symbol"],
+            ),
+        ),
+        genai.FunctionDeclaration(
+            name="get_historical_data",
+            description="Get historical stock data (Open, High, Low, Close, Volume) for a given ticker symbol and period.",
+            parameters=genai.FunctionParameters(
+                type=genai.Type.OBJECT,
+                properties={
+                    "ticker_symbol": genai.Schema(type=genai.Type.STRING, description="The stock ticker symbol (e.g., 'AAPL', 'GOOGL')."),
+                    "period": genai.Schema(type=genai.Type.STRING, description="The period for historical data (e.g., '1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max'). Defaults to '1mo' if not specified."),
+                    "interval": genai.Schema(type=genai.Type.STRING, description="The interval for historical data (e.g., '1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo'). Defaults to '1d' for periods > 7d, '1h' for periods <= 7d. Note: '1m' interval only available for last 7 days."),
+                },
+                required=["ticker_symbol"],
+            ),
+        ),
     ]
 )
 
