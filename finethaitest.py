@@ -138,6 +138,11 @@ with st.sidebar:
                 # Prepend stock context to the current user prompt if available
                 current_prompt_with_context = stock_context + prompt
 
+                # --- NEW ADDITION FOR TESTING ---
+                # Print the full prompt being sent to the Gemini API
+                print(f"\n--- Sending to Gemini ---\n{current_prompt_with_context}\n--------------------------\n")
+                # --- END NEW ADDITION ---
+
                 # Start a chat session with the history
                 # Exclude the current user prompt (which now includes context) from initial history passed to start_chat
                 # as it will be sent separately by chat.send_message()
